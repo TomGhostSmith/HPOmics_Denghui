@@ -1,5 +1,6 @@
 import sys
 from collections import defaultdict
+import numpy
 sys.path.append(".")
 
 import config.config as config
@@ -11,15 +12,18 @@ class HPO:
     def __init__(self) -> None:
         self.id = None
         self.name = None
-        self.parents = set()      # parent is a set of term id
-        self.children = set()     # children is a set of term id
-        self.alternates = set()   # alternates is a set of term id replaced by this term
-        self.ancestors = set()    # ancestors is a set of term id, which includes parents, grandparents, etc.
-        self.descendants = set()  # descendants is a set of term id, which includes children, grandchildren, etc.
+        self.index = 0
+        self.parents = set()        # parent is a set of term id, which do not include itself
+        self.children = set()       # children is a set of term id, which do not include itself
+        self.alternates = set()     # alternates is a set of term id replaced by this term
+        self.ancestors = set()      # ancestors is a set of term id, which includes parents, grandparents, etc.
+        self.descendants = set()    # descendants is a set of term id, which includes children, grandchildren, etc.
+        self.ancestorMask = None    # an array full of 0 and 1. 1 means this index of HPO is the ancestor. include itself
+        self.descendantMask = None  # an array full of 0 and 1. 1 means this index of HPO is the descendant. include itself
         self.info = {}
 
     def setId(self, id):
-            self.id = id
+        self.id = id
 
     def setName(self, name):
         self.name = name
@@ -60,11 +64,13 @@ class HPOTree:
         self.considerMap = dict()
         self.noParentNodes = set()
         self.IC = None
+        self.ICList = None
     
     def addHPO(self, HPONode):
         if (len(HPONode.parents) == 0 and HPONode.id != 'HP:0000001'):
             self.noParentNodes.add(HPONode)
         else:
+            HPONode.index = len(self.HPOList.keys())
             if (HPONode.id == 'HP:0000001'):
                 self.rootNode = HPONode
             self.HPOList[HPONode.id] = HPONode
@@ -79,8 +85,10 @@ class HPOTree:
             self.considerMap[oldTerm] = set()
         self.considerMap[oldTerm].add(newTerm)
     
+    # WARN: HPOIC.values() remains the original order of HPO. This feature requires python 3.7 or later
     def setIC(self, HPOIC):
         self.IC = HPOIC
+        self.ICList = list(HPOIC.values())
 
     def getSimilarity(self, term1, term2):
         """
@@ -129,7 +137,9 @@ class HPOTree:
 
     # calc children for each term with 'is_a' information 
     def relink(self):
+        HPOCount = len(self.HPOList.keys())
         for (term, node) in self.HPOList.items():
+            node.ancestorMask = [0] * HPOCount
             for parent in node.parents:
                 if (self.HPOList.get(parent) == None):
                     IOUtils.showInfo(f"Cannot find term {parent}, which is a parent of term {term}", 'ERROR')
@@ -138,12 +148,28 @@ class HPOTree:
         
         # for (term, node) in self.HPOList.items():
         #     node.descendants |= node.children
+                    
         
-        self.relinkNode(set(), self.rootNode)
+        self.relinkNode(set(), list(), self.rootNode)
         # if (self.iterate):
         #     self.relinkNode(set(), self.rootNode)
         # else:
         #     self.relinkAll()
+
+
+
+        # HPOTermList = list(self.HPOList.keys())
+        # idx = 0
+        # for (term, node) in self.HPOList.items():
+        #     node.ancestorMask = numpy.isin(HPOTermList, list(node.ancestors)).astype(int)
+        #     node.ancestorMask[node.index] = 1
+        #     node.descendantMask = numpy.isin(HPOTermList, list(node.descendants)).astype(int)
+        #     node.descendantMask[node.index] = 1
+        #     idx += 1
+        #     if (idx % 100 == 0):
+        #         IOUtils.showInfo(f"{idx}/{len(HPOTermList)}")
+
+
 
     # get current node. The input term may be current, or may be replaced
     def getHPO(self, termID):
@@ -169,13 +195,18 @@ class HPOTree:
         return list(self.HPOList.keys())
     
     # calculate ancestors and descendants recursively, which costs 0.3s
-    def relinkNode(self, ancestorList, node):  # ancestorList is the path of terms from root to currentNode
+    # arg ancestorList is the path of terms from root to currentNode
+    # arg ancestorIndexList is the indexes for ancestorList. Use this arg to boost operation
+    def relinkNode(self, ancestorList, ancestorIndexList, node):  
         node.ancestors |= ancestorList
+        for idx in ancestorIndexList:
+            node.ancestorMask[idx] = 1
+        node.ancestorMask[node.index] = 1
         thisset = set()
         thisset.add(node.id)
         newAncestorList = ancestorList | thisset
         for childTerm in node.children:
-            descendantList = self.relinkNode(newAncestorList, self.HPOList[childTerm])
+            descendantList = self.relinkNode(newAncestorList, ancestorIndexList + [node.index], self.HPOList[childTerm])
             node.descendants |= descendantList
         return node.descendants
 

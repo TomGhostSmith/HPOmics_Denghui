@@ -3,7 +3,7 @@ import sys
 import json
 import math
 import numpy
-import cupy
+# import cupy
 sys.path.append(".")
 
 import config.config as config
@@ -193,35 +193,56 @@ def calcSimilarity(tree):
     HPOCount = len(tree.getValidHPOTermList())
     
     # CPU version
-    totalSize = (HPOCount + 1) * HPOCount / 2
-    similarityMatrix = numpy.zeros([HPOCount, HPOCount])
-    index1 = 0
-    for (term1, node1) in tree.HPOList.items():
-        index2 = 0
-        for (term2, node2) in tree.HPOList.items():
-            if (index1 == index2):
-                similarityMatrix[index1, index2] = 1
-                break    # only calculate index2 in range of [0, index1], which is a triangle.
-            else:
-                similarity = tree.getSimilarity(term1, term2)
-                similarityMatrix[index1, index2] = similarity
-                similarityMatrix[index2, index1] = similarity
+    # totalSize = (HPOCount + 1) * HPOCount / 2
+    similarityMatrix = numpy.zeros([HPOCount, HPOCount], dtype=numpy.float32)
+    # index1 = 0
+    # for (term1, node1) in tree.HPOList.items():
+    #     index2 = 0
+    #     for (term2, node2) in tree.HPOList.items():
+    #         if (index1 == index2):
+    #             similarityMatrix[index1, index2] = 1
+    #             break    # only calculate index2 in range of [0, index1], which is a triangle.
+    #         else:
+    #             similarity = tree.getSimilarity(term1, term2)
+    #             similarityMatrix[index1, index2] = similarity
+    #             similarityMatrix[index2, index1] = similarity
 
-            index2 += 1
-            total = index1 * (index1 + 1) / 2 + index2
-            if (total % 200000 == 0):
-                IOUtils.showInfo(f"- progress: {total:.0f}/{totalSize:.0f}, {(total/totalSize*100):.2f}%")
-        index1 += 1
+    #         index2 += 1
+    #         total = index1 * (index1 + 1) / 2 + index2
+    #         if (total % 200000 == 0):
+    #             IOUtils.showInfo(f"- progress: {total:.0f}/{totalSize:.0f}, {(total/totalSize*100):.2f}%")
+    #     index1 += 1
 
 
-    # GPU version
-    HPOList = tree.getValidHPOTermList()
-    HPOList_GPU = cupy.asarray(HPOList)
-    index_x, index_y = cupy.meshgrid(cupy.arange(HPOCount), cupy.arange(HPOCount))
-    similarityMatrix_GPU = tree.getSimilarity(HPOList_GPU[index_x], HPOList_GPU[index_y])
-    similarityMatrix = cupy.asnumpy(similarityMatrix_GPU)
-    
-    numpy.savetxt('a.txt', similarityMatrix)
+    # CPU version of numpy
+    ICArray = numpy.array(tree.ICList, dtype=numpy.float32)
+    ancestorMaskMatrix = numpy.array([node.ancestorMask for node in tree.HPOList.values()])
+    ancestorMaskMatrixWithIC = numpy.multiply(ICArray, ancestorMaskMatrix)
+    for (term, node) in tree.HPOList.items():
+        thisICArray = numpy.array([ICArray[node.index]] * HPOCount, dtype=numpy.float32)
+        commonAncestorMaskMatrixWithIC = numpy.multiply(node.ancestorMask, ancestorMaskMatrixWithIC)
+        MICAArrayWithIC = numpy.max(commonAncestorMaskMatrixWithIC, axis=1)
+        numerator = MICAArrayWithIC * 2       # 2 * IC_MICA
+        denominator = thisICArray + ICArray   # IC_Term1 + IC_Term2
+        similarityForOneTerm = numpy.divide(numerator, denominator, out=numpy.zeros_like(numerator), where=denominator != 0)
+        similarityMatrix[node.index, :] = similarityForOneTerm
+        IOUtils.showInfo(f"{node.index}/{HPOCount}")
+
+    # GPU version of cupy
+    ICArray = cupy.array(tree.ICList, dtype=cupy.float32)
+    ancestorMaskMatrix = cupy.array([node.ancestorMask for node in tree.HPOList.values()])
+    ancestorMaskMatrixWithIC = cupy.multiply(ICArray, ancestorMaskMatrix)
+    for (term, node) in tree.HPOList.items():
+        thisICArray = cupy.array([ICArray[node.index]] * HPOCount, dtype=cupy.float32)
+        commonAncestorMaskMatrixWithIC = cupy.multiply(node.ancestorMask, ancestorMaskMatrixWithIC)
+        MICAArrayWithIC = cupy.max(commonAncestorMaskMatrixWithIC, axis=1)
+        numerator = MICAArrayWithIC * 2       # 2 * IC_MICA
+        denominator = thisICArray + ICArray   # IC_Term1 + IC_Term2
+        similarityForOneTerm = cupy.divide(numerator, denominator, out=cupy.zeros_like(numerator), where=denominator != 0)
+        similarityMatrix[node.index, :] = cupy.asnumpy(similarityForOneTerm)
+        IOUtils.showInfo(f"{node.index}/{HPOCount}")
+
+    # numpy.savetxt('a.txt', similarityMatrix)
 
 
 
