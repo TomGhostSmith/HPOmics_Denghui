@@ -18,8 +18,9 @@ class HPO:
         self.alternates = set()     # alternates is a set of term id replaced by this term
         self.ancestors = set()      # ancestors is a set of term id, which includes parents, grandparents, etc.
         self.descendants = set()    # descendants is a set of term id, which includes children, grandchildren, etc.
-        self.ancestorMask = None    # an array full of 0 and 1. 1 means this index of HPO is the ancestor. include itself
-        self.descendantMask = None  # an array full of 0 and 1. 1 means this index of HPO is the descendant. include itself
+        self.ancestorIndexs = set()
+        # self.ancestorMask = None    # an array full of 0 and 1. 1 means this index of HPO is the ancestor. include itself
+        # self.descendantMask = None  # an array full of 0 and 1. 1 means this index of HPO is the descendant. include itself
         self.info = {}
 
     def setId(self, id):
@@ -139,7 +140,8 @@ class HPOTree:
     def relink(self):
         HPOCount = len(self.HPOList.keys())
         for (term, node) in self.HPOList.items():
-            node.ancestorMask = [0] * HPOCount
+            # node.ancestorMask = [0] * HPOCount
+            node.ancestorIndexs.add(node.index)
             for parent in node.parents:
                 if (self.HPOList.get(parent) == None):
                     IOUtils.showInfo(f"Cannot find term {parent}, which is a parent of term {term}", 'ERROR')
@@ -150,7 +152,7 @@ class HPOTree:
         #     node.descendants |= node.children
                     
         
-        self.relinkNode(set(), list(), self.rootNode)
+        self.relinkNode(set(), set(), self.rootNode)
         # if (self.iterate):
         #     self.relinkNode(set(), self.rootNode)
         # else:
@@ -199,14 +201,18 @@ class HPOTree:
     # arg ancestorIndexList is the indexes for ancestorList. Use this arg to boost operation
     def relinkNode(self, ancestorList, ancestorIndexList, node):  
         node.ancestors |= ancestorList
-        for idx in ancestorIndexList:
-            node.ancestorMask[idx] = 1
-        node.ancestorMask[node.index] = 1
+        node.ancestorIndexs |= ancestorIndexList
+        # for idx in ancestorIndexList:
+        #     node.ancestorMask[idx] = 1
+        # node.ancestorMask[node.index] = 1
         thisset = set()
         thisset.add(node.id)
         newAncestorList = ancestorList | thisset
+        thisset = set()
+        thisset.add(node.index)
+        newAncestorIndexList = ancestorIndexList | thisset
         for childTerm in node.children:
-            descendantList = self.relinkNode(newAncestorList, ancestorIndexList + [node.index], self.HPOList[childTerm])
+            descendantList = self.relinkNode(newAncestorList, newAncestorIndexList, self.HPOList[childTerm])
             node.descendants |= descendantList
         return node.descendants
 
