@@ -3,7 +3,8 @@ import sys
 import json
 import math
 import numpy
-import cupy
+from scipy.sparse import csr_matrix
+# import cupy
 sys.path.append(".")
 
 import config.config as config
@@ -13,6 +14,40 @@ from model.HPO import HPO
 from model.HPO import HPOTree
 from model.Disease import Disease
 from model.Gene import Gene
+
+if (config.GPUAvailable):
+    import cupy
+
+def calcSynonymDisease():
+    diseaseSynonymMap = dict()
+
+    # load ORPHA to OMIM map
+    with open(file=config.diseaseSynonymAnnotationPath, mode='rt', encoding='utf-8') as fp:
+        synonyms = json.load(fp)
+    synonyms = synonyms['JDBOR'][0]["DisorderList"][0]["Disorder"]
+    for synonym in synonyms:
+        orphanCode = f"ORPHA:{synonym['OrphaCode']}"
+        refs = synonym["ExternalReferenceList"][0].get('ExternalReference')
+        if (refs != None):
+            for ref in refs:
+                if (ref['Source'] == 'OMIM'):
+                    OMIMCode = f"OMIM:{ref['Reference']}"
+                    diseaseSynonymMap[orphanCode] = OMIMCode
+    
+    # load CCRD to ORPHA or OMIM map
+    with open(file=config.phenoBrainCCRD2ORPHAPath, mode='rt', encoding='utf-8') as fp:
+        synonyms = json.load(fp)
+    for (CCRDTerm, values) in synonyms.items():
+        diseaseSynonymMap[CCRDTerm] = set()
+        for group in values:
+            ORPHATerm = group[0]
+            OMIMTerm = diseaseSynonymMap.get(ORPHATerm)
+            if (OMIMTerm == None):
+                diseaseSynonymMap[CCRDTerm].add(ORPHATerm)
+            else:
+                diseaseSynonymMap[CCRDTerm].add(OMIMTerm)
+
+    return diseaseSynonymMap
 
 def calcGene2PhenotypeJson(tree):
     IOUtils.showInfo("Calculating gene to phenotype json.")
@@ -50,12 +85,12 @@ def calcGene2PhenotypeJson(tree):
     with open(file=config.geneListPath, mode='wt', encoding='utf-8') as fp:
         json.dump(obj=list(gene2Phenotype.keys()), fp=fp, indent=2, sort_keys=True)
     
-    # return all HPO terms in the annotation, which is the result of set union
-    # return set(reduce(lambda a, b: set(a) | set(b), [HPODesc['phenotypeList'] for HPODesc in gene2Phenotype.values()]))
 
-def calcDisease2PhenotypeJson(tree):
+
+def calcDisease2PhenotypeJson(tree, diseaseSynonymMap):
     IOUtils.showInfo("Calculating disease to phenotype json.")
     disease2Phenotype = dict()
+    # operating HPO annotation from OMIM
     with open(file=config.disease2PhenotypeAnnotationPath, mode='rt', encoding='utf-8') as fp:
         titleLineScanned = False
         for line in fp:
@@ -66,6 +101,12 @@ def calcDisease2PhenotypeJson(tree):
                     termsInLine = line.strip().split('\t')
                     if (len(termsInLine) >= 4):
                         diseaseId = termsInLine[0]
+                        if (diseaseId.startswith('ORPHA')):
+                            OMIMId = diseaseSynonymMap.get(diseaseId)
+                            if (OMIMId != None):
+                                diseaseId = OMIMId
+                            # else:
+                                # IOUtils.showInfo(f"Cannot find OMIM code for {diseaseId}")
                         diseaseName = termsInLine[1]
                         phenotype = termsInLine[3]
 
@@ -74,42 +115,48 @@ def calcDisease2PhenotypeJson(tree):
                                 "name": set(),
                                 "phenotypeList": set()
                             }
+                        validTerm = tree.getValidHPOTerm(phenotype)
                         disease2Phenotype[diseaseId]["name"].add(diseaseName)
-                        disease2Phenotype[diseaseId]["phenotypeList"].add(tree.getValidHPOTerm(phenotype))
+                        if (validTerm != None):
+                            disease2Phenotype[diseaseId]["phenotypeList"].add(validTerm)
 
-            line = fp.readline()
-
+    # operate HPO annotation from PhenoBrain using CCRD data
+    # note: there might be some invalid HPO term in the annotation
+    with open(file=config.phenoBrainCCRD2HPOPath, mode='rt', encoding='utf-8') as fp:
+        CCRDAnnotation = json.load(fp)
+    for (CCRDTerm, value) in CCRDAnnotation.items():
+        OMIMTerms = diseaseSynonymMap.get(CCRDTerm)
+        for OMIMTerm in OMIMTerms:
+            if (disease2Phenotype.get(OMIMTerm) == None):
+                disease2Phenotype[OMIMTerm] = {
+                    "name": set(),
+                    "phenotypeList": set()
+                }
+            for term in value['PHENOTYPE_LIST']:
+                validTerm = tree.getValidHPOTerm(term)
+                if (validTerm != None):
+                    if (validTerm not in disease2Phenotype[OMIMTerm]['phenotypeList']):
+                        IOUtils.showInfo(f'CCRD add term {term}({validTerm}) to disease {OMIMTerm}')
+                    disease2Phenotype[OMIMTerm]['phenotypeList'].add(validTerm)
+    
     # check if one id has multiple names, and convert set to list
     for (key, value) in disease2Phenotype.items():
         value["name"] = list(value["name"])
         value["phenotypeList"] = list(value["phenotypeList"])
         if (len(value["name"]) > 1):
             IOUtils.showInfo(f"Disease '{key}' has multiple names: {value['name']}", 'WARN')
-    
+
     with open(file=config.disease2PhenotypeJsonPath, mode='wt', encoding='utf-8') as fp:
         json.dump(obj=disease2Phenotype, fp=fp, indent=2, sort_keys=True)
 
     with open(file=config.diseaseListPath, mode='wt', encoding='utf-8') as fp:
         json.dump(obj=list(disease2Phenotype.keys()), fp=fp, indent=2, sort_keys=True)
 
-    # return all HPO terms in the annotation, which is the result of set union
-    # return set(reduce(lambda a, b: set(a) | set(b), [HPODesc['phenotypeList'] for HPODesc in disease2Phenotype.values()]))
-
-# def loadHPOList():
-#     HPOTree = HPOUtils.loadHPOTree()
-#     HPOTermList = HPOTree.getHPOTermList()
-#     with open(file=config.HPOListPath, mode='wt', encoding='utf-8') as fp:
-#         json.dump(obj=HPOTermList, fp=fp, indent=2, sort_keys=True)
-
-
 def calcTermICWithDisease(tree):
     IOUtils.showInfo("Calculating Disease IC.")
     # get HPO2Disease json
     with open(file=config.disease2PhenotypeJsonPath, mode='rt', encoding='utf-8') as fp:
         disease2HPO = json.load(fp)
-    
-    # with open(file=config.HPOListPath, mode='rt', encoding='utf-8') as fp:
-        # HPOList = json.load(fp)
 
     with open(file=config.diseaseListPath, mode='rt', encoding='utf-8') as fp:
         diseaseList = json.load(fp)
@@ -140,9 +187,6 @@ def calcTermICWithGene(tree):
     IOUtils.showInfo("Calculating Gene IC.")
     with open(file=config.gene2PhenotypeJsonPath, mode='rt', encoding='utf-8') as fp:
         gene2HPO = json.load(fp)
-    
-    # with open(file=config.HPOListPath, mode='rt', encoding='utf-8') as fp:
-        # HPOList = json.load(fp)
 
     with open(file=config.geneListPath, mode='rt', encoding='utf-8') as fp:
         geneList = json.load(fp)
@@ -188,106 +232,48 @@ def calcIntegratedIC(tree, diseaseIC, geneIC):
     return integratedIC
 
 def calcSimilarity(tree):
+    """
+    Lin measure, see Lin D. An information-theoretic definition of
+    similarity. In: ICML, vol. Vol. 98, no. 1998; 1998. p. 296-304.
+    For each pair of term (x, y), sim(x, y) = 2 * MICA(x, y).IC / (x.IC + y.IC)
+    """
+
     ancestorIndexsList = [node.ancestorIndexs for node in tree.HPOList.values()]
 
     IOUtils.showInfo("Calculating Similarity Matrix.")
     HPOCount = len(tree.getValidHPOTermList())
     ICList = tree.ICList
-    ICArray = cupy.array(ICList)
     
-    # CPU version
     MICAMatrix = numpy.zeros([HPOCount, HPOCount], dtype=numpy.float32)
-    denominatorMatrx = ICArray[:, None] + ICArray[None, :]
 
-
-    # version 1
-    # items = tree.HPOList.items()
-    # for (term1, node1) in items:
-    #     index1 = node1.index
-    #     node1AncestorIndexs = node1.ancestorIndexs
-    #     for (term2, node2) in items:
-    #         index2 = node2.index
-    #         if (index1 == index2):
-    #             # similarityMatrix[index1, index2] = 1
-    #             MICAMatrix[index1, index2] = ICList[index1]
-    #             break    # only calculate index2 in range of [0, index1], which is a triangle.
-    #         else:
-    #             commonAncestorIndexs= node1AncestorIndexs & node2.ancestorIndexs
-    #             MICAMatrix[index1, index2] = max([ICList[ancestorIndex] for ancestorIndex in commonAncestorIndexs])
-    
-
-    # version 2
+    # calculate MICA Matrix, only lower triangle
     for index1 in range(0, HPOCount):
         node1AncestorIndexs = ancestorIndexsList[index1]
         for index2 in range (0, index1):
             commonAncestorIndexs = node1AncestorIndexs & ancestorIndexsList[index2]
             MICAMatrix[index1, index2] = max([ICList[ancestorIndex] for ancestorIndex in commonAncestorIndexs])
-                
-    IOUtils.showInfo("MICA Calculation finished!")
-    MICAMatrix = cupy.array(MICAMatrix) * 2
-    similarityMatrix = cupy.divide(MICAMatrix, denominatorMatrx).get()
-    IOUtils.showInfo("Similarity calc finished!")
 
-
-    # CPU version of numpy
-    # ICArray = numpy.array(tree.ICList, dtype=numpy.float32)
-    # ancestorMaskMatrix = numpy.array([node.ancestorMask for node in tree.HPOList.values()])
-    # ancestorMaskMatrixWithIC = numpy.multiply(ICArray, ancestorMaskMatrix)
-    # for (term, node) in tree.HPOList.items():
-    #     thisICArray = numpy.array([ICArray[node.index]] * HPOCount, dtype=numpy.float32)
-    #     commonAncestorMaskMatrixWithIC = numpy.multiply(numpy.array(node.ancestorMask), ancestorMaskMatrixWithIC)
-    #     MICAArrayWithIC = numpy.max(commonAncestorMaskMatrixWithIC, axis=1)
-    #     numerator = MICAArrayWithIC * 2       # 2 * IC_MICA
-    #     denominator = thisICArray + ICArray   # IC_Term1 + IC_Term2
-    #     similarityForOneTerm = numpy.divide(numerator, denominator, out=numpy.zeros_like(numerator), where=denominator != 0)
-    #     similarityMatrix[node.index, :] = similarityForOneTerm
-    #     IOUtils.showInfo(f"{node.index}/{HPOCount}")
-
-    # GPU version of cupy
-    # ICArray = cupy.array(tree.ICList, dtype=cupy.float32)
-    # ancestorIndexMatrix = [cupy.array(list(node.ancestorIndexs)) for node in tree.HPOList.values()]
-    # # ancestorMaskMatrixWithIC = cupy.multiply(ICArray, ancestorMaskMatrix)
-    # for (term, node) in tree.HPOList.items():
-    #     # thisICArray = cupy.array([ICArray[node.index]] * HPOCount, dtype=cupy.float32)
-
-    #     # IOUtils.showInfo("Step 1")
-    #     ancestorIndexArray = cupy.array(list(node.ancestorIndexs))
-    #     # commonAncestorMaskMatrixWithIC = cupy.multiply(ancestorMaskArray, ancestorMaskMatrixWithIC)
-    #     commonAncestorIndex = cupy.array([cupy.intersect1d(ancestorIndexArray, cupy.array(row)) for row in ancestorIndexMatrix])
-    #     commonAncestorIC = (ICArray[commonAncestorIndex])
-    #     # commonAncestorMaskMatrixWithIC = cupy.where(ancestorMaskArray == 0, 0, ancestorMaskMatrixWithIC)
-
-    #     # IOUtils.showInfo("Step 2")
-    #     MICAArrayWithIC = cupy.max(commonAncestorIC, axis=1)
-
-    #     # IOUtils.showInfo("Step 3")
-    #     numerator = MICAArrayWithIC * 2       # 2 * IC_MICA
-
-    #     # IOUtils.showInfo("Step 4")
-    #     denominator = ICArray + ICArray[node.index]   # IC_Term1 + IC_Term2
-        
-    #     # IOUtils.showInfo("Step 5")
-    #     similarityForOneTerm = cupy.where(denominator != 0, numerator/denominator, 0)
-
-    #     # IOUtils.showInfo("Step 6")
-    #     similarityMatrix[node.index, :] = cupy.asnumpy(similarityForOneTerm)
-
-    #     # IOUtils.showInfo("Step 7")
-    #     # if (node.index == 10):
-    #         # break
-    #     if (node.index % 100 == 0):
-    #         IOUtils.showInfo(f"{node.index}/{HPOCount}")
-
-    # numpy.savetxt('a.txt', similarityMatrix)
-
-
+    # calculate denominator, which is IC1 + IC2. Can be accelerated by cuda
+    if (config.GPUAvailable):              
+        ICArray = cupy.array(ICList)
+        denominatorMatrx = ICArray[:, None] + ICArray[None, :]  
+        MICAMatrix = cupy.array(MICAMatrix) * 2
+        similarityMatrix = cupy.divide(MICAMatrix, denominatorMatrx).get()
+    else:
+        ICArray = numpy.array(ICList)
+        denominatorMatrx = ICArray[:, None] + ICArray[None, :]  
+        MICAMatrix = MICAMatrix * 2
+        similarityMatrix = numpy.divide(MICAMatrix, denominatorMatrx, out=numpy.zeros_like(denominatorMatrx), where=denominatorMatrx != 0)
+    IOUtils.showInfo("Similarity calc finished, saving result...")
+    numpy.savez_compressed(config.similarityMatrixPath, similarityMatrix=similarityMatrix)
 
 
 def main():
+    diseaseSynonymMap = calcSynonymDisease()
     IOUtils.showInfo("Start preprocessing...")
     tree = HPOUtils.loadHPOTree()
     calcGene2PhenotypeJson(tree)
-    calcDisease2PhenotypeJson(tree)
+    calcDisease2PhenotypeJson(tree, diseaseSynonymMap)
     diseaseIC = calcTermICWithDisease(tree)
     geneIC = calcTermICWithGene(tree)
     integratedIC = calcIntegratedIC(tree, diseaseIC, geneIC)

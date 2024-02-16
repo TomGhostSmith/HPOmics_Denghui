@@ -2,6 +2,7 @@ import os
 import datetime
 import sys
 import json
+import numpy
 sys.path.append(".")
 
 import config.config as config
@@ -51,29 +52,19 @@ def loadHPOTree():
                 newTerm = line[10:]
                 tree.addConsideration(oldTerm=currentTerm, newTerm=newTerm)
                 currentNode = None
+            elif (line.startswith('is_obsolete: true')):
+                currentNode = None
 
     # submit the former node if there is already a node recorded
     if (currentNode != None):
         tree.addHPO(currentNode)
 
-    # calc children for each term with 'is_a' information 
-    tree.relink()
-
+    tree.postProcess()
     return tree
 
-# IOUtils.showInfo("Start loading HPO tree")
-# a = loadHPOTree()
-# IOUtils.showInfo("Loaded with iterate")
-# b = loadHPOTree()
-# IOUtils.showInfo("Loaded without iterate")
-# hpos = list(a.HPOList.keys())
-# for hpo in hpos:
-#     an = a.HPOList[hpo]
-#     bn = b.HPOList[hpo]
-#     if (len(an.ancestors) != len(bn.ancestors)):
-#         IOUtils.showInfo(f"Term {hpo} not same!", 'ERROR')
-# IOUtils.showInfo("release iterated result")
-# a = None
-# IOUtils.showInfo("release non-iterated result")
-# b = None
-# IOUtils.showInfo("Done")
+def setIC(HPOTree):
+    with open(file=config.integratedICPath, mode='rt', encoding='utf-8') as fp:
+        HPOTree.setIC(json.load(fp))
+
+def setSimilarity(HPOTree):
+    HPOTree.similarityMatrix = numpy.load(config.similarityMatrixPath)['similarityMatrix']

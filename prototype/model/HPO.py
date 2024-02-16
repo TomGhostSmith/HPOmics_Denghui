@@ -66,13 +66,15 @@ class HPOTree:
         self.noParentNodes = set()
         self.IC = None
         self.ICList = None
+        self.nonPhenotypicTerms = set()
+        self.similarityMatrix = None
     
     def addHPO(self, HPONode):
-        if (len(HPONode.parents) == 0 and HPONode.id != 'HP:0000001'):
+        if (len(HPONode.parents) == 0 and HPONode.id != config.HPORoot):
             self.noParentNodes.add(HPONode)
         else:
             HPONode.index = len(self.HPOList.keys())
-            if (HPONode.id == 'HP:0000001'):
+            if (HPONode.id == config.HPORoot):
                 self.rootNode = HPONode
             self.HPOList[HPONode.id] = HPONode
             for alternate in HPONode.alternates:
@@ -90,34 +92,34 @@ class HPOTree:
     def setIC(self, HPOIC):
         self.IC = HPOIC
         self.ICList = list(HPOIC.values())
-
-    def getSimilarity(self, term1, term2):
-        """
-        Lin measure, see Lin D. An information-theoretic definition of
-        similarity. In: ICML, vol. Vol. 98, no. 1998; 1998. p. 296-304.
-        """
-        if (term1 == term2):
+    
+    def getSimilarity(self, node1, node2):
+        if (node1.index == node2.index):
             return 1
+        elif (node1.index < node2.index):
+            return self.similarityMatrix[node2.index, node1.index]
         else:
-            node1 = self.HPOList[term1]
-            node2 = self.HPOList[term2]
-            ICTerm1 = self.IC[term1]
-            ICTerm2 = self.IC[term2]
-            commonAncestors = list(node1.getGeneralAncestors() & node2.getGeneralAncestors())
-            if (len(commonAncestors) == 0):
-                print("?")
-            IC_MICA = max([self.IC[ancestor] for ancestor in commonAncestors])
-            if (ICTerm1 + ICTerm2 == 0):
-                similarity = 0
-            else:
-                similarity = 2 * IC_MICA / (ICTerm1 + ICTerm2)
-            return similarity
+            return self.similarityMatrix[node1.index, node2.index]
+    
+    def postProcess(self):
+        self.calculateReplacement()
+        self.calculateLink()
+        self.calculateNonPhenotypicNodes()
 
+    # pick out HPO terms for non phenotypic use (e.g. frequency, blood group, inheritance mode)
+    def calculateNonPhenotypicNodes(self):
+        for (term, description) in config.specialHPO.items():
+            if (description != 'Phenotypic abnormality'):
+                specialNode = self.HPOList.get(term)
+                if (specialNode != None):
+                    self.nonPhenotypicTerms.add(term)
+                    for descendant in specialNode.descendants:
+                        self.nonPhenotypicTerms.add(descendant)
 
     # handle tempReplaceMap for 'replaced_by' term
     # handle no parent nodes if they are replaced by others
-    def replace(self):
-        for (oldTerm, newTerm) in self.tempReplaceMap:
+    def calculateReplacement(self):
+        for (oldTerm, newTerm) in self.tempReplaceMap.items():
             newNode = self.HPOList[newTerm]
             if (newNode == None):
                 IOUtils.showInfo("Cannot find replacement term {newTerm}", 'ERROR')
@@ -137,8 +139,7 @@ class HPOTree:
                 IOUtils.showInfo(f"Term {node.id} has no parent!", 'ERROR')
 
     # calc children for each term with 'is_a' information 
-    def relink(self):
-        HPOCount = len(self.HPOList.keys())
+    def calculateLink(self):
         for (term, node) in self.HPOList.items():
             # node.ancestorMask = [0] * HPOCount
             node.ancestorIndexs.add(node.index)
@@ -148,30 +149,24 @@ class HPOTree:
                 else:
                     self.HPOList[parent].addChild(node.id)
         
-        # for (term, node) in self.HPOList.items():
-        #     node.descendants |= node.children
-                    
-        
         self.relinkNode(set(), set(), self.rootNode)
-        # if (self.iterate):
-        #     self.relinkNode(set(), self.rootNode)
-        # else:
-        #     self.relinkAll()
 
-
-
-        # HPOTermList = list(self.HPOList.keys())
-        # idx = 0
-        # for (term, node) in self.HPOList.items():
-        #     node.ancestorMask = numpy.isin(HPOTermList, list(node.ancestors)).astype(int)
-        #     node.ancestorMask[node.index] = 1
-        #     node.descendantMask = numpy.isin(HPOTermList, list(node.descendants)).astype(int)
-        #     node.descendantMask[node.index] = 1
-        #     idx += 1
-        #     if (idx % 100 == 0):
-        #         IOUtils.showInfo(f"{idx}/{len(HPOTermList)}")
-
-
+    # calculate ancestors and descendants recursively, which costs 0.3s
+    # arg ancestorList is the path of terms from root to currentNode
+    # arg ancestorIndexList is the indexes for ancestorList. Use this arg to boost operation
+    def relinkNode(self, ancestorList, ancestorIndexList, node):  
+        node.ancestors |= ancestorList
+        node.ancestorIndexs |= ancestorIndexList
+        thisset = set()
+        thisset.add(node.id)
+        newAncestorList = ancestorList | thisset
+        thisIndexset = set()
+        thisIndexset.add(node.index)
+        newAncestorIndexList = ancestorIndexList | thisIndexset
+        for childTerm in node.children:
+            descendantList = self.relinkNode(newAncestorList, newAncestorIndexList, self.HPOList[childTerm])
+            node.descendants |= descendantList
+        return node.descendants | thisset
 
     # get current node. The input term may be current, or may be replaced
     def getHPO(self, termID):
@@ -181,7 +176,10 @@ class HPOTree:
             result = validHPO
         else:   # no valid HPO available. Need to search in replacement
             result = self.replaceMap.get(termID)
-            IOUtils.showInfo('Term {termID} is replaced by {result.id}', 'WARN')
+            if (result != None):
+                IOUtils.showInfo(f'Term {termID} is replaced by {result.id}', 'WARN')
+            else:
+                IOUtils.showInfo(f'Term {termID} is not valid in HPO version {config.HPOVersion}', 'WARN')
         return result
 
     # get current term. The input term may be current, or may be replaced
@@ -189,48 +187,15 @@ class HPOTree:
         if (self.HPOList.get(termID) != None):
             result = termID
         else:
-            result = self.replaceMap.get(termID).id
-            IOUtils.showInfo('Term {termID} is replaced by {result}', 'WARN')
+            validNode = self.replaceMap.get(termID)
+            if (validNode != None):
+                result = validNode.id
+                IOUtils.showInfo(f'Term {termID} is replaced by {result}', 'WARN')
+            else:
+                result = None
+                IOUtils.showInfo(f'Term {termID} is not valid in HPO version {config.HPOVersion}', 'WARN')
         return result
 
     def getValidHPOTermList(self):
         return list(self.HPOList.keys())
     
-    # calculate ancestors and descendants recursively, which costs 0.3s
-    # arg ancestorList is the path of terms from root to currentNode
-    # arg ancestorIndexList is the indexes for ancestorList. Use this arg to boost operation
-    def relinkNode(self, ancestorList, ancestorIndexList, node):  
-        node.ancestors |= ancestorList
-        node.ancestorIndexs |= ancestorIndexList
-        # for idx in ancestorIndexList:
-        #     node.ancestorMask[idx] = 1
-        # node.ancestorMask[node.index] = 1
-        thisset = set()
-        thisset.add(node.id)
-        newAncestorList = ancestorList | thisset
-        thisset = set()
-        thisset.add(node.index)
-        newAncestorIndexList = ancestorIndexList | thisset
-        for childTerm in node.children:
-            descendantList = self.relinkNode(newAncestorList, newAncestorIndexList, self.HPOList[childTerm])
-            node.descendants |= descendantList
-        return node.descendants
-
-    # Another version to calculate ancestors and descendants, which costs 0.7s
-    # def relinkAll(self):
-    #     modified = True
-    #     while (modified):
-    #         modified = False
-    #         for (term, node) in self.HPOList.items():
-    #             for parentTerm in node.parents:
-    #                 parentNode = self.HPOList[parentTerm]
-    #                 originLength = len(parentNode.descendants)
-    #                 parentNode.descendants |= node.descendants
-    #                 newLength = len(parentNode.descendants)
-    #                 modified |= (originLength != newLength)
-    #             for childTerm in node.children:
-    #                 childNode = self.HPOList[childTerm]
-    #                 originLength = len(childNode.ancestors)
-    #                 childNode.ancestors |= node.ancestors
-    #                 newLength = len(childNode.ancestors)
-    #                 modified |= (originLength != newLength)
