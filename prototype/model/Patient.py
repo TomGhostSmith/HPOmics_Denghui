@@ -10,13 +10,13 @@ class Patient:
     # output result in lines
     def getResult(self):
         result = list()
-        result.append('id, name, score\n')
+        result.append('id, name, disease2Patient, patient2Disease, diseaseIC, patientIC\n')
         if (self.taskType == 'disease'):
             for (disease, score) in self.results.items():
                 # result.append(f'{disease.id}, {str(disease.name).replace(",", " ")}, {score}\n')
                 result.append(f'{disease.id}, , {score}\n')
         else:
-            for (gene, score) in self.results:
-                result.append(f'{gene.id}, {str(gene.name).replace(",", " ")}, {score}\n')
+            for (gene, score) in self.results.items():
+                result.append(f'{gene.id}, {str(gene.name[0]).replace(",", " ")}, {score}\n')
 
         return result

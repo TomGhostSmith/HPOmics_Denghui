@@ -135,8 +135,6 @@ def calcDisease2PhenotypeJson(tree, diseaseSynonymMap):
             for term in value['PHENOTYPE_LIST']:
                 validTerm = tree.getValidHPOTerm(term)
                 if (validTerm != None):
-                    if (validTerm not in disease2Phenotype[OMIMTerm]['phenotypeList']):
-                        IOUtils.showInfo(f'CCRD add term {term}({validTerm}) to disease {OMIMTerm}')
                     disease2Phenotype[OMIMTerm]['phenotypeList'].add(validTerm)
     
     # check if one id has multiple names, and convert set to list
@@ -231,16 +229,10 @@ def calcIntegratedIC(tree, diseaseIC, geneIC):
     
     return integratedIC
 
-def calcSimilarity(tree):
-    """
-    Lin measure, see Lin D. An information-theoretic definition of
-    similarity. In: ICML, vol. Vol. 98, no. 1998; 1998. p. 296-304.
-    For each pair of term (x, y), sim(x, y) = 2 * MICA(x, y).IC / (x.IC + y.IC)
-    """
-
+def calcMICAMatrix(tree):
     ancestorIndexsList = [node.ancestorIndexs for node in tree.HPOList.values()]
 
-    IOUtils.showInfo("Calculating Similarity Matrix.")
+    IOUtils.showInfo("Calculating MICA Matrix")
     HPOCount = len(tree.getValidHPOTermList())
     ICList = tree.ICList
     
@@ -252,23 +244,13 @@ def calcSimilarity(tree):
         for index2 in range (0, index1):
             commonAncestorIndexs = node1AncestorIndexs & ancestorIndexsList[index2]
             MICAMatrix[index1, index2] = max([ICList[ancestorIndex] for ancestorIndex in commonAncestorIndexs])
-
-    # calculate denominator, which is IC1 + IC2. Can be accelerated by cuda
-    if (config.GPUAvailable):              
-        ICArray = cupy.array(ICList)
-        denominatorMatrx = ICArray[:, None] + ICArray[None, :]  
-        MICAMatrix = cupy.array(MICAMatrix) * 2
-        similarityMatrix = cupy.divide(MICAMatrix, denominatorMatrx).get()
-    else:
-        ICArray = numpy.array(ICList)
-        denominatorMatrx = ICArray[:, None] + ICArray[None, :]  
-        MICAMatrix = MICAMatrix * 2
-        similarityMatrix = numpy.divide(MICAMatrix, denominatorMatrx, out=numpy.zeros_like(denominatorMatrx), where=denominatorMatrx != 0)
-    IOUtils.showInfo("Similarity calc finished, saving result...")
-    numpy.savez_compressed(config.similarityMatrixPath, similarityMatrix=similarityMatrix)
+    IOUtils.showInfo("MICA Matrix calc finished, saving result")
+    numpy.savez_compressed(config.MICAMatirxPath, MICAMatrix=MICAMatrix)
+    IOUtils.showInfo("MICA Matrix saved")
 
 
 def main():
+    IOUtils.init()
     diseaseSynonymMap = calcSynonymDisease()
     IOUtils.showInfo("Start preprocessing...")
     tree = HPOUtils.loadHPOTree()
@@ -278,7 +260,8 @@ def main():
     geneIC = calcTermICWithGene(tree)
     integratedIC = calcIntegratedIC(tree, diseaseIC, geneIC)
     tree.setIC(integratedIC)
-    calcSimilarity(tree)
+    # tree.setIC(geneIC)
+    calcMICAMatrix(tree)
 
     IOUtils.showInfo("Preprocess finished.")
 

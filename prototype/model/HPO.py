@@ -50,6 +50,14 @@ class HPO:
         result = self.ancestors | set()
         result.add(self.id)
         return result
+
+    def getType(self):
+        ancestors = self.ancestors
+        HPOTypes = set()
+        for (key, value) in config.HPOClasses.items():
+            if (key in ancestors):
+                HPOTypes.add(value)
+        return HPOTypes
     
     # test for multiple construction function
     # @classmethod
@@ -67,7 +75,8 @@ class HPOTree:
         self.IC = None
         self.ICList = None
         self.nonPhenotypicTerms = set()
-        self.similarityMatrix = None
+        self.LinSimilarityMatrix = None
+        self.JCSimilarityMatrix = None
     
     def addHPO(self, HPONode):
         if (len(HPONode.parents) == 0 and HPONode.id != config.HPORoot):
@@ -93,13 +102,20 @@ class HPOTree:
         self.IC = HPOIC
         self.ICList = list(HPOIC.values())
     
-    def getSimilarity(self, node1, node2):
+    def getSimilarity(self, node1, node2, type='Lin'):
         if (node1.index == node2.index):
             return 1
         elif (node1.index < node2.index):
-            return self.similarityMatrix[node2.index, node1.index]
+            if (type == 'Lin'):
+                return self.LinSimilarityMatrix[node2.index, node1.index]
+            else:
+                return self.JCSimilarityMatrix[node2.index, node1.index]
         else:
-            return self.similarityMatrix[node1.index, node2.index]
+            if (type == 'Lin'):
+                return self.LinSimilarityMatrix[node1.index, node2.index]
+            else:
+                return self.JCSimilarityMatrix[node1.index, node2.index]
+
     
     def postProcess(self):
         self.calculateReplacement()
