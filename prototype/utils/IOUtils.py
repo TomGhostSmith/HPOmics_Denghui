@@ -4,7 +4,9 @@ import sys
 import json
 sys.path.append(".")
 
-import config.config as config
+from config import config
+# from config import Config
+# config = Config()
 
 
 
@@ -14,6 +16,8 @@ def checkdir(path):
         print(f'Making new folder for {path}')
 
 def showInfo(message, type='INFO'):
+    if (type == 'WARN' and config.ignoreWarning == True):
+        return
     currentTime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     print(f"{currentTime} ({os.getpid()}) [{type}] {message}")
 
@@ -31,3 +35,4 @@ def init():
     ]
     for folder in folders:
         checkdir(folder)
+init()

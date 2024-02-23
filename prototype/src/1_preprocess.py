@@ -7,9 +7,9 @@ from scipy.sparse import csr_matrix
 # import cupy
 sys.path.append(".")
 
-import config.config as config
+from config import config
 import utils.IOUtils as IOUtils
-import utils.HPOUtils as HPOUtils
+from utils.HPOUtils import HPOUtils
 from model.HPO import HPO
 from model.HPO import HPOTree
 from model.Disease import Disease
@@ -49,7 +49,7 @@ def calcSynonymDisease():
 
     return diseaseSynonymMap
 
-def calcGene2PhenotypeJson(tree):
+def calcGene2PhenotypeJson():
     IOUtils.showInfo("Calculating gene to phenotype json.")
     gene2Phenotype = dict()
     with open(file=config.gene2PhenotypeAnnotationPath, mode='rt', encoding='utf-8') as fp:
@@ -68,16 +68,26 @@ def calcGene2PhenotypeJson(tree):
                         "phenotypeList": set()
                     }
                 gene2Phenotype[geneId]["name"].add(geneSymbol)
-                gene2Phenotype[geneId]["phenotypeList"].add(tree.getValidHPOTerm(phenotype))
+                gene2Phenotype[geneId]["phenotypeList"].add(HPOUtils.HPOTree.getValidHPOTerm(phenotype))
 
             line = fp.readline()
 
     # check if one id has multiple names, and convert set to list
+    # calculate gene type
     for (key, value) in gene2Phenotype.items():
         value["name"] = list(value["name"])
         value["phenotypeList"] = list(value["phenotypeList"])
         if (len(value["name"]) > 1):
             IOUtils.showInfo(f"Gene ID '{key}' has multiple symbols: {value['name']}", 'WARN')
+        
+        for term in value["phenotypeList"]:
+            countMap = {geneType: 0 for geneType in config.HPOClasses.values()}
+            node = HPOUtils.HPOTree.getHPO(term)
+            HPOTypes = node.getType()
+            for HPOType in HPOTypes:
+                countMap[HPOType] += 1
+        value["type"] = sorted(countMap.items(), key=lambda pair:pair[1], reverse=True)[0][0]
+
         
     with open(file=config.gene2PhenotypeJsonPath, mode='wt', encoding='utf-8') as fp:
         json.dump(obj=gene2Phenotype, fp=fp, indent=2, sort_keys=True)
@@ -87,7 +97,7 @@ def calcGene2PhenotypeJson(tree):
     
 
 
-def calcDisease2PhenotypeJson(tree, diseaseSynonymMap):
+def calcDisease2PhenotypeJson(diseaseSynonymMap):
     IOUtils.showInfo("Calculating disease to phenotype json.")
     disease2Phenotype = dict()
     # operating HPO annotation from OMIM
@@ -115,27 +125,27 @@ def calcDisease2PhenotypeJson(tree, diseaseSynonymMap):
                                 "name": set(),
                                 "phenotypeList": set()
                             }
-                        validTerm = tree.getValidHPOTerm(phenotype)
+                        validTerm = HPOUtils.HPOTree.getValidHPOTerm(phenotype)
                         disease2Phenotype[diseaseId]["name"].add(diseaseName)
                         if (validTerm != None):
                             disease2Phenotype[diseaseId]["phenotypeList"].add(validTerm)
 
     # operate HPO annotation from PhenoBrain using CCRD data
     # note: there might be some invalid HPO term in the annotation
-    with open(file=config.phenoBrainCCRD2HPOPath, mode='rt', encoding='utf-8') as fp:
-        CCRDAnnotation = json.load(fp)
-    for (CCRDTerm, value) in CCRDAnnotation.items():
-        OMIMTerms = diseaseSynonymMap.get(CCRDTerm)
-        for OMIMTerm in OMIMTerms:
-            if (disease2Phenotype.get(OMIMTerm) == None):
-                disease2Phenotype[OMIMTerm] = {
-                    "name": set(),
-                    "phenotypeList": set()
-                }
-            for term in value['PHENOTYPE_LIST']:
-                validTerm = tree.getValidHPOTerm(term)
-                if (validTerm != None):
-                    disease2Phenotype[OMIMTerm]['phenotypeList'].add(validTerm)
+    # with open(file=config.phenoBrainCCRD2HPOPath, mode='rt', encoding='utf-8') as fp:
+    #     CCRDAnnotation = json.load(fp)
+    # for (CCRDTerm, value) in CCRDAnnotation.items():
+    #     OMIMTerms = diseaseSynonymMap.get(CCRDTerm)
+    #     for OMIMTerm in OMIMTerms:
+    #         if (disease2Phenotype.get(OMIMTerm) == None):
+    #             disease2Phenotype[OMIMTerm] = {
+    #                 "name": set(),
+    #                 "phenotypeList": set()
+    #             }
+    #         for term in value['PHENOTYPE_LIST']:
+    #             validTerm = tree.getValidHPOTerm(term)
+    #             if (validTerm != None):
+    #                 disease2Phenotype[OMIMTerm]['phenotypeList'].add(validTerm)
     
     # check if one id has multiple names, and convert set to list
     for (key, value) in disease2Phenotype.items():
@@ -143,6 +153,14 @@ def calcDisease2PhenotypeJson(tree, diseaseSynonymMap):
         value["phenotypeList"] = list(value["phenotypeList"])
         if (len(value["name"]) > 1):
             IOUtils.showInfo(f"Disease '{key}' has multiple names: {value['name']}", 'WARN')
+            
+        for term in value["phenotypeList"]:
+            countMap = {geneType: 0 for geneType in config.HPOClasses.values()}
+            node = HPOUtils.HPOTree.getHPO(term)
+            HPOTypes = node.getType()
+            for HPOType in HPOTypes:
+                countMap[HPOType] += 1
+        value["type"] = sorted(countMap.items(), key=lambda pair:pair[1], reverse=True)[0][0]
 
     with open(file=config.disease2PhenotypeJsonPath, mode='wt', encoding='utf-8') as fp:
         json.dump(obj=disease2Phenotype, fp=fp, indent=2, sort_keys=True)
@@ -150,7 +168,7 @@ def calcDisease2PhenotypeJson(tree, diseaseSynonymMap):
     with open(file=config.diseaseListPath, mode='wt', encoding='utf-8') as fp:
         json.dump(obj=list(disease2Phenotype.keys()), fp=fp, indent=2, sort_keys=True)
 
-def calcTermICWithDisease(tree):
+def calcTermICWithDisease():
     IOUtils.showInfo("Calculating Disease IC.")
     # get HPO2Disease json
     with open(file=config.disease2PhenotypeJsonPath, mode='rt', encoding='utf-8') as fp:
@@ -162,11 +180,11 @@ def calcTermICWithDisease(tree):
     
     # init with HPOList in case there is some HPO not show up in annotation
     HPO2Disease = {}
-    for HPOTerm in tree.getValidHPOTermList():
+    for HPOTerm in HPOUtils.HPOTree.getValidHPOTermList():
         HPO2Disease[HPOTerm] = set()
     for (disease, diseaseDesc) in disease2HPO.items():
         for HPOTerm in diseaseDesc['phenotypeList']:
-            currentNode = tree.getHPO(HPOTerm)
+            currentNode = HPOUtils.HPOTree.getHPO(HPOTerm)
             HPO2Disease[currentNode.id].add(disease)
             for ancestor in currentNode.ancestors:
                 HPO2Disease[ancestor].add(disease)
@@ -181,7 +199,7 @@ def calcTermICWithDisease(tree):
     return diseaseIC
     
 
-def calcTermICWithGene(tree):
+def calcTermICWithGene():
     IOUtils.showInfo("Calculating Gene IC.")
     with open(file=config.gene2PhenotypeJsonPath, mode='rt', encoding='utf-8') as fp:
         gene2HPO = json.load(fp)
@@ -192,11 +210,11 @@ def calcTermICWithGene(tree):
     
     # init with HPOList in case there is some HPO not show up in annotation
     HPO2Gene = {}
-    for HPOTerm in tree.getValidHPOTermList():
+    for HPOTerm in HPOUtils.HPOTree.getValidHPOTermList():
         HPO2Gene[HPOTerm] = set()
     for (gene, geneDesc) in gene2HPO.items():
         for HPOTerm in geneDesc['phenotypeList']:
-            currentNode = tree.getHPO(HPOTerm)
+            currentNode = HPOUtils.HPOTree.getHPO(HPOTerm)
             HPO2Gene[currentNode.id].add(gene)
             for ancestor in currentNode.ancestors:
                 HPO2Gene[ancestor].add(gene)
@@ -210,11 +228,11 @@ def calcTermICWithGene(tree):
 
     return geneIC
 
-def calcIntegratedIC(tree, diseaseIC, geneIC):
+def calcIntegratedIC(diseaseIC, geneIC):
     IOUtils.showInfo("Calculating Integrated IC.")
     integratedIC = dict()
 
-    for HPOTerm in tree.getValidHPOTermList():
+    for HPOTerm in HPOUtils.HPOTree.getValidHPOTermList():
         diseaseICForTerm = diseaseIC[HPOTerm]
         geneICForTerm = geneIC[HPOTerm]
         if (diseaseICForTerm == 0):
@@ -229,12 +247,12 @@ def calcIntegratedIC(tree, diseaseIC, geneIC):
     
     return integratedIC
 
-def calcMICAMatrix(tree):
-    ancestorIndexsList = [node.ancestorIndexs for node in tree.HPOList.values()]
+def calcMICAMatrix():
+    ancestorIndexsList = [node.ancestorIndexs for node in HPOUtils.HPOTree.HPOList.values()]
 
     IOUtils.showInfo("Calculating MICA Matrix")
-    HPOCount = len(tree.getValidHPOTermList())
-    ICList = tree.ICList
+    HPOCount = len(HPOUtils.HPOTree.getValidHPOTermList())
+    ICList = HPOUtils.HPOTree.ICList
     
     MICAMatrix = numpy.zeros([HPOCount, HPOCount], dtype=numpy.float32)
 
@@ -250,22 +268,20 @@ def calcMICAMatrix(tree):
 
 
 def main():
-    IOUtils.init()
     diseaseSynonymMap = calcSynonymDisease()
     IOUtils.showInfo("Start preprocessing...")
-    tree = HPOUtils.loadHPOTree()
-    calcGene2PhenotypeJson(tree)
-    calcDisease2PhenotypeJson(tree, diseaseSynonymMap)
-    diseaseIC = calcTermICWithDisease(tree)
-    geneIC = calcTermICWithGene(tree)
-    integratedIC = calcIntegratedIC(tree, diseaseIC, geneIC)
+    calcGene2PhenotypeJson()
+    calcDisease2PhenotypeJson(diseaseSynonymMap)
+    diseaseIC = calcTermICWithDisease()
+    geneIC = calcTermICWithGene()
+    integratedIC = calcIntegratedIC(diseaseIC, geneIC)
     if (config.ICType == 'disease'):
-        tree.setIC(diseaseIC)
+        HPOUtils.HPOTree.setIC(diseaseIC)
     elif (config.ICType == 'gene'):
-        tree.setIC(geneIC)
+        HPOUtils.HPOTree.setIC(geneIC)
     else:
-        tree.setIC(integratedIC)
-    calcMICAMatrix(tree)
+        HPOUtils.HPOTree.setIC(integratedIC)
+    calcMICAMatrix()
 
     IOUtils.showInfo("Preprocess finished.")
 

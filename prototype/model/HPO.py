@@ -3,7 +3,7 @@ from collections import defaultdict
 import numpy
 sys.path.append(".")
 
-import config.config as config
+from config import config
 import utils.IOUtils as IOUtils
 
 # Note: HPO Node means a HPO object, while HPO Term means a string like HP:xxxxxxx

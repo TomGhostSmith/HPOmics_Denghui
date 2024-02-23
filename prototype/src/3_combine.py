@@ -4,7 +4,7 @@ import math
 import multiprocessing
 sys.path.append('.')
 
-import config.config as config
+from config import config
 from utils import IOUtils
 
 
@@ -40,7 +40,7 @@ def calc(disease2Patient, patient2Disease, diseaseIC, patientIC):
         # return max(patient2Disease/patientIC, disease2Patient/diseaseIC)
         # return (patient2Disease/patientIC*diseaseIC + disease2Patient/diseaseIC*patientIC)/(patientIC + diseaseIC)
 
-def combineFiles(files):
+def combineFiles(files, resultPath):
     for file in files:
         # skip folders
         if (os.path.isdir(f"{config.splitResultPath}/{file}")):
@@ -63,11 +63,10 @@ def combineFiles(files):
         else:
             lines = [f' ,{key}, {value}\n' for (key, value) in result.items()]
         lines.insert(0, 'id, name, score\n')
-        with open(f"{config.resultPath}/{file}", 'wt') as fp:
+        with open(f"{resultPath}/{file}", 'wt') as fp:
             fp.writelines(lines)
 
 def main():
-    IOUtils.init()
     IOUtils.showInfo("Start combining splitted results")
     files = sorted(os.listdir(config.splitResultPath))
 
@@ -80,7 +79,7 @@ def main():
             if (pid == 0):
                 startIndex = i * caseCountForOne
                 endIndex = min((i + 1) * caseCountForOne, len(files))   # this index is not included
-                combineFiles(files[startIndex:endIndex])
+                combineFiles(files[startIndex:endIndex], config.resultPath)
                 os._exit(0)
             else:
                 IOUtils.showInfo(f'Forked subprocess with pid {pid}')
@@ -89,9 +88,8 @@ def main():
         for pid in childPIDList:
             os.waitpid(pid, 0)
     else:
-        combineFiles(files)
+        combineFiles(files, config.resultPath)
 
-        
     IOUtils.showInfo("Combination finished")
     
 if (__name__ == '__main__'):

@@ -5,16 +5,14 @@ import json
 import multiprocessing
 sys.path.append(".")
 
-import config.config as config
+from config import config
 import utils.IOUtils as IOUtils
-import utils.HPOUtils as HPOUtils
+from utils.HPOUtils import HPOUtils
 from model.Patient import Patient
-from model.Disease import Disease
-from model.Disease import DiseaseEvaluator
-from model.Gene import Gene
-from model.Gene import GeneEvaluator
+from utils.DiseaseUtils import DiseaseUtils
+from utils.GeneUtils import GeneUtils
 
-def evaluateOne(HPOTree, diseaseEvaluator, geneEvaluator, file):
+def evaluateOne(file):
     # extract file name
     dotIndex = str(file).rfind('.')
     if (dotIndex != -1):
@@ -24,20 +22,20 @@ def evaluateOne(HPOTree, diseaseEvaluator, geneEvaluator, file):
 
     # extract HPO term and replace old term with new
     with open(file=f"{config.patientPath}/{file}", mode='rt', encoding='utf-8') as fp:
-        HPOList, totalIC = HPOUtils.extractPreciseHPONodes(HPOTree, fp.readlines())
+        HPOList, totalIC = HPOUtils.extractPreciseHPONodes(fp.readlines())
     
     patient = Patient(fileName=fileName, HPOList=HPOList, info=None, taskType=config.taskType, totalIC=totalIC)  # info can be used in the future
 
     if (patient.taskType == 'disease'):
-        diseaseEvaluator.evaluate(patient)
+        DiseaseUtils.evaluate(patient)
     else:
-        geneEvaluator.evaluate(patient)
+        GeneUtils.evaluate(patient)
 
     with open(file=f'{config.splitResultPath}/{fileName}.csv', mode='wt', encoding='utf-8') as fp:
         fp.writelines(patient.getResult())
 
 
-def evaluate(HPOTree, diseaseEvaluator, geneEvaluator):
+def evaluate():
     patientFiles = sorted(os.listdir(config.patientPath))
     processedCount = 0
     totalCount = len(patientFiles)
@@ -139,7 +137,7 @@ def evaluate(HPOTree, diseaseEvaluator, geneEvaluator):
                     (task, index) = fileQueue.get()
                     # (task, index) = fileQueue.pop(0)
                     fileQueueLock.release()
-                    evaluateOne(HPOTree, diseaseEvaluator, geneEvaluator, task, index)
+                    evaluateOne(task, index)
                     IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}")
                 os._exit(0)
             else:
@@ -151,7 +149,7 @@ def evaluate(HPOTree, diseaseEvaluator, geneEvaluator):
     else:
         while (not fileQueue.empty()):
             (task, index) = fileQueue.get()
-            evaluateOne(HPOTree, diseaseEvaluator, geneEvaluator, task)
+            evaluateOne(task)
             IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}")
     
 
@@ -164,14 +162,8 @@ def evaluate(HPOTree, diseaseEvaluator, geneEvaluator):
     #     p.join()
 
 def main():
-    IOUtils.init()
-    HPOTree = HPOUtils.loadHPOTree()
-    HPOUtils.loadIC(HPOTree)
-    HPOUtils.loadSimilarity(HPOTree)
-    diseaseEvaluator = DiseaseEvaluator(HPOUtils.loadDiseases(HPOTree), HPOTree)
-    geneEvaluator = GeneEvaluator(HPOUtils.loadGenes(HPOTree), HPOTree)
     IOUtils.showInfo("Start evaluate")
-    evaluate(HPOTree, diseaseEvaluator, geneEvaluator)
+    evaluate()
     IOUtils.showInfo("Process finished")
 
 if (__name__ == '__main__'):
