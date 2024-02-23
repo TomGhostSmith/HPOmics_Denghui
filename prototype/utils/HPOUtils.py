@@ -16,6 +16,7 @@ from model.Gene import GeneList
 
 if (config.GPUAvailable):
     import cupy
+    IOUtils.showInfo("Use GPU to acclerate calculation. Cupy loaded")
 
 def loadHPOTree():
     tree = HPOTree()
@@ -70,10 +71,15 @@ def loadHPOTree():
 
 def loadIC(HPOTree):
     IOUtils.showInfo("Loading IC")
-    with open(file=config.integratedICPath, mode='rt', encoding='utf-8') as fp:
-    # with open(file=config.ICFromDiseasePath, mode='rt', encoding='utf-8') as fp:
-    # with open(file=config.ICFromGenePath, mode='rt', encoding='utf-8') as fp:
-        HPOTree.setIC(json.load(fp))
+    if (config.ICType == 'disease'):
+        with open(file=config.ICFromDiseasePath, mode='rt', encoding='utf-8') as fp:
+            HPOTree.setIC(json.load(fp))
+    elif (config.ICType == 'gene'):
+        with open(file=config.ICFromGenePath, mode='rt', encoding='utf-8') as fp:
+            HPOTree.setIC(json.load(fp))
+    else:
+        with open(file=config.integratedICPath, mode='rt', encoding='utf-8') as fp:
+            HPOTree.setIC(json.load(fp))
 
 def loadSimilarity(HPOTree):
     """
@@ -98,7 +104,7 @@ def loadSimilarity(HPOTree):
     MICAMatrix = numpy.load(config.MICAMatirxPath)['MICAMatrix']
     if (config.GPUAvailable):
         ICArray = cupy.array(ICList)
-        denominatorMatrx = ICArray[:, None] + ICArray[None, :]  
+        denominatorMatrx = ICArray[:, cupy.newaxis] + ICArray[cupy.newaxis, :]  
         MICAMatrix = cupy.array(MICAMatrix)
         LinSimilarityMatrix = cupy.divide(MICAMatrix * 2, denominatorMatrx)
         JCSimilarityMatrix = cupy.divide(1, 1 + denominatorMatrx - MICAMatrix * 2)
@@ -124,13 +130,9 @@ def loadSimilarity(HPOTree):
     #         JCSimilarityMatrix[ancestorIndex, thisIndex] *= 1.2
             
 
-    # HPOTree.similarityMatrix = LinSimilarityMatrix
-    HPOTree.LinSimilarityMatrix = LinSimilarityMatrix
-    # HPOTree.JCSimilarityMatrix = JCSimilarityMatrix
-    HPOTree.JCSimilarityMatrix = LinSimilarityMatrix
-    # HPOTree.similarityMatrix = JCSimilarityMatrix
-    # HPOTree.similarityMatrix = ICSimilarityMatrix
-    # HPOTree.similarityMatrix = newSimilarityMatrix
+    HPOTree.similarityMatrix['Lin'] = LinSimilarityMatrix
+    HPOTree.similarityMatrix['JC'] = JCSimilarityMatrix
+    HPOTree.similarityMatrix['IC'] = ICSimilarityMatrix
     IOUtils.showInfo("Similarity loaded")
 
 # convert HPO terms to nodes, filter out invalid terms, filter out non-phenotypic terms

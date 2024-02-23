@@ -1,6 +1,11 @@
+import multiprocessing
+import sys
+sys.path.append('.')
+
 from utils import IOUtils
 from utils import HPOUtils
 import config.config as config
+import model.Patient as Patient
 
 class Gene:
     def __init__(self, id, name, relatedHPONodes, totalIC) -> None:
@@ -44,6 +49,20 @@ class GeneEvaluator:
     def __init__(self, geneList, HPOTree):
         self.geneList = geneList.geneIDMap.values()
         self.HPOTree = HPOTree
+        # self.patientList = list()
+
+    # def addTask(self, patient):
+    #     self.patientList.append(patient)
+    
+    # def waitForExit(self):
+    #     IOUtils.showInfo("?")
+    #     pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    #     for patient in self.patientList:
+    #         # pool.apply(func=self.evaluate, args=(patient,))
+    #         pool.apply_async(func=self.evaluate, args=(patient,))
+    #     pool.close()
+    #     pool.join()
+    #     IOUtils.showInfo("!")
 
     def evaluate(self, patient):
         scores = dict()
@@ -53,7 +72,7 @@ class GeneEvaluator:
             for geneNode in gene.relatedHPONodes:
                 similarities = list()
                 for patientNode in patient.HPOList:
-                    similarities.append(self.HPOTree.getSimilarity(geneNode, patientNode, 'Lin'))
+                    similarities.append(self.HPOTree.getSimilarity(geneNode, patientNode, config.similarityMethod))
                 similarities.append(0)
                 thisIC = self.HPOTree.ICList[geneNode.index]
                 gene2PatientScore += max(similarities) * thisIC
@@ -62,7 +81,7 @@ class GeneEvaluator:
             for patientNode in patient.HPOList:
                 similarities = list()
                 for geneNode in gene.relatedHPONodes:
-                    similarities.append(self.HPOTree.getSimilarity(geneNode, patientNode, 'Lin'))
+                    similarities.append(self.HPOTree.getSimilarity(geneNode, patientNode, config.similarityMethod))
                 similarities.append(0)
                 thisIC = self.HPOTree.ICList[patientNode.index]
                 patient2GeneScore += max(similarities) * thisIC

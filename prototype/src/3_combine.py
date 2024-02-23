@@ -1,6 +1,7 @@
 import sys
 import os
 import math
+import multiprocessing
 sys.path.append('.')
 
 import config.config as config
@@ -9,7 +10,7 @@ from utils import IOUtils
 
 def calc(disease2Patient, patient2Disease, diseaseIC, patientIC):
     # return (disease2Patient + patient2Disease)/(diseaseIC + patientIC)
-    if (diseaseIC + patientIC != 0):
+    if (patientIC != 0 and diseaseIC + patientIC != 0):
         return (disease2Patient + patient2Disease)/(diseaseIC + patientIC) + patient2Disease/patientIC
     # if (patientIC != 0):
         # return patient2Disease/patientIC
@@ -39,10 +40,7 @@ def calc(disease2Patient, patient2Disease, diseaseIC, patientIC):
         # return max(patient2Disease/patientIC, disease2Patient/diseaseIC)
         # return (patient2Disease/patientIC*diseaseIC + disease2Patient/diseaseIC*patientIC)/(patientIC + diseaseIC)
 
-def main():
-    IOUtils.init()
-    IOUtils.showInfo("Start combining splitted results")
-    files = os.listdir(config.splitResultPath)
+def combineFiles(files):
     for file in files:
         # skip folders
         if (os.path.isdir(f"{config.splitResultPath}/{file}")):
@@ -67,6 +65,33 @@ def main():
         lines.insert(0, 'id, name, score\n')
         with open(f"{config.resultPath}/{file}", 'wt') as fp:
             fp.writelines(lines)
+
+def main():
+    IOUtils.init()
+    IOUtils.showInfo("Start combining splitted results")
+    files = sorted(os.listdir(config.splitResultPath))
+
+    if (config.supportFork):
+        caseCountForOne = math.ceil(len(files) / config.CPUCores)
+        childPIDList = list()
+
+        for i in range (config.CPUCores):
+            pid = os.fork()
+            if (pid == 0):
+                startIndex = i * caseCountForOne
+                endIndex = min((i + 1) * caseCountForOne, len(files))   # this index is not included
+                combineFiles(files[startIndex:endIndex])
+                os._exit(0)
+            else:
+                IOUtils.showInfo(f'Forked subprocess with pid {pid}')
+                childPIDList.append(pid)
+        
+        for pid in childPIDList:
+            os.waitpid(pid, 0)
+    else:
+        combineFiles(files)
+
+        
     IOUtils.showInfo("Combination finished")
     
 if (__name__ == '__main__'):

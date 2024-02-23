@@ -259,8 +259,12 @@ def main():
     diseaseIC = calcTermICWithDisease(tree)
     geneIC = calcTermICWithGene(tree)
     integratedIC = calcIntegratedIC(tree, diseaseIC, geneIC)
-    tree.setIC(integratedIC)
-    # tree.setIC(geneIC)
+    if (config.ICType == 'disease'):
+        tree.setIC(diseaseIC)
+    elif (config.ICType == 'gene'):
+        tree.setIC(geneIC)
+    else:
+        tree.setIC(integratedIC)
     calcMICAMatrix(tree)
 
     IOUtils.showInfo("Preprocess finished.")

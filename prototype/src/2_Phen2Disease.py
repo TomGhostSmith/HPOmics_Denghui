@@ -2,6 +2,7 @@ import sys
 import os
 import numpy
 import json
+import multiprocessing
 sys.path.append(".")
 
 import config.config as config
@@ -13,8 +14,31 @@ from model.Disease import DiseaseEvaluator
 from model.Gene import Gene
 from model.Gene import GeneEvaluator
 
+def evaluateOne(HPOTree, diseaseEvaluator, geneEvaluator, file):
+    # extract file name
+    dotIndex = str(file).rfind('.')
+    if (dotIndex != -1):
+        fileName = str(file)[:dotIndex]
+    else:
+        fileName = str(file)
+
+    # extract HPO term and replace old term with new
+    with open(file=f"{config.patientPath}/{file}", mode='rt', encoding='utf-8') as fp:
+        HPOList, totalIC = HPOUtils.extractPreciseHPONodes(HPOTree, fp.readlines())
+    
+    patient = Patient(fileName=fileName, HPOList=HPOList, info=None, taskType=config.taskType, totalIC=totalIC)  # info can be used in the future
+
+    if (patient.taskType == 'disease'):
+        diseaseEvaluator.evaluate(patient)
+    else:
+        geneEvaluator.evaluate(patient)
+
+    with open(file=f'{config.splitResultPath}/{fileName}.csv', mode='wt', encoding='utf-8') as fp:
+        fp.writelines(patient.getResult())
+
+
 def evaluate(HPOTree, diseaseEvaluator, geneEvaluator):
-    patientFiles = os.listdir(config.patientPath)
+    patientFiles = sorted(os.listdir(config.patientPath))
     processedCount = 0
     totalCount = len(patientFiles)
 
@@ -22,6 +46,17 @@ def evaluate(HPOTree, diseaseEvaluator, geneEvaluator):
     startIndex = 0
     # endIndex = 1
     endIndex = len(patientFiles)
+
+    # pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    # manager = multiprocessing.Manager()
+    # diseaseEvaluatorManager = manager.Namespace()
+    # diseaseEvaluatorManager.instance = diseaseEvaluator
+
+    # geneEvaluatorManager = manager.Namespace()
+    # geneEvaluatorManager.instance = diseaseEvaluator
+
+    fileQueue = multiprocessing.Queue()
+    # fileQueue = list()
 
     for file in patientFiles:
         # skip folders
@@ -36,16 +71,21 @@ def evaluate(HPOTree, diseaseEvaluator, geneEvaluator):
             IOUtils.showInfo(f"[{processedCount}/{totalCount}] Skipped file {str(file)}")
             continue
 
-        # extract file name
-        dotIndex = str(file).rfind('.')
-        if (dotIndex != -1):
-            fileName = str(file)[:dotIndex]
-        else:
-            fileName = str(file)
 
-        # extract HPO term and replace old term with new
-        with open(file=f"{config.patientPath}/{file}", mode='rt', encoding='utf-8') as fp:
-            HPOList, totalIC = HPOUtils.extractPreciseHPONodes(HPOTree, fp.readlines())
+
+        # dotIndex = str(file).rfind('.')
+        # if (dotIndex != -1):
+        #     fileName = str(file)[:dotIndex]
+        # else:
+        #     fileName = str(file)
+
+        # # extract HPO term and replace old term with new
+        # with open(file=f"{config.patientPath}/{file}", mode='rt', encoding='utf-8') as fp:
+        #     HPOList, totalIC = HPOUtils.extractPreciseHPONodes(HPOTree, fp.readlines())
+        
+        # patient = Patient(fileName=fileName, HPOList=HPOList, info=None, taskType=config.taskType, totalIC=totalIC)  # info can be used in the future
+
+        
 
 
             # test: use all ancestors
@@ -64,24 +104,67 @@ def evaluate(HPOTree, diseaseEvaluator, geneEvaluator):
         
 
         # can be modified to execute disease task and gene task customly
-        patient = Patient(fileName=fileName, HPOList=HPOList, info=None, taskType=config.taskType, totalIC=totalIC)  # info can be used in the future
 
         # evaluate case
-        if (patient.taskType == 'disease'):
-            diseaseEvaluator.evaluate(patient)
-        else:
-            geneEvaluator.evaluate(patient)
-        
-        # store result
-        with open(file=f'{config.splitResultPath}/{fileName}.csv', mode='wt', encoding='utf-8') as fp:
-            fp.writelines(patient.getResult())
-        
         processedCount += 1
-        IOUtils.showInfo(f"[{processedCount}/{totalCount}] Processed file {str(file)}")
+
+        fileQueue.put((file, processedCount))
+        # fileQueue.append((file, processedCount))
+        
+
+        
+
+        # geneEvaluator.addTask(file)
+
+        # pool.apply_async(func=evaluateOne, args=(HPOTree, diseaseEvaluatorManager, geneEvaluatorManager, file, processedCount))
+
+        # p = multiprocessing.Process(target=evaluateOne, args=(HPOTree, diseaseEvaluator, geneEvaluator, file, processedCount))
+        # processes.append((processedCount, file, p))
+        # p.start()
+        # IOUtils.showInfo(f"[{processedCount}/{totalCount}] Loaded task for file {str(file)}")
+    
+    if (config.supportFork):
+        fileQueueLock = multiprocessing.Lock()
+        childPIDList = list()
+
+        for _ in range (config.CPUCores):
+            pid = os.fork()
+            if (pid == 0):
+                while True:
+                    fileQueueLock.acquire()
+                    if (fileQueue.empty()):
+                    # if (len(fileQueue) == 0):
+                        fileQueueLock.release()
+                        break
+                    (task, index) = fileQueue.get()
+                    # (task, index) = fileQueue.pop(0)
+                    fileQueueLock.release()
+                    evaluateOne(HPOTree, diseaseEvaluator, geneEvaluator, task, index)
+                    IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}")
+                os._exit(0)
+            else:
+                IOUtils.showInfo(f'Forked subprocess with pid {pid}')
+                childPIDList.append(pid)
+        
+        for pid in childPIDList:
+            os.waitpid(pid, 0)
+    else:
+        while (not fileQueue.empty()):
+            (task, index) = fileQueue.get()
+            evaluateOne(HPOTree, diseaseEvaluator, geneEvaluator, task)
+            IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}")
+    
+
+
+    # pool.close()
+    # pool.join()
+        
+    # processedCount = startIndex
+    # for (index, file, p) in processes:
+    #     p.join()
 
 def main():
     IOUtils.init()
-    IOUtils.showInfo(f"Start to evaluate dataset {config.testsetName}. Rank target: {config.taskType}")
     HPOTree = HPOUtils.loadHPOTree()
     HPOUtils.loadIC(HPOTree)
     HPOUtils.loadSimilarity(HPOTree)

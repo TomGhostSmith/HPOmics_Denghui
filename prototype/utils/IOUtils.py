@@ -15,10 +15,11 @@ def checkdir(path):
 
 def showInfo(message, type='INFO'):
     currentTime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-    print(f"{currentTime} [{type}] {message}")
+    print(f"{currentTime} ({os.getpid()}) [{type}] {message}")
 
 # create folders if not exists
 def init():
+    showInfo(f'Task: {config.taskName}. Use GPU: {config.GPUAvailable}. CPU Cores: {config.CPUCores}. Use fork: {config.supportFork}')
     folders = [
         config.projectPath,
         config.splitResultPath,

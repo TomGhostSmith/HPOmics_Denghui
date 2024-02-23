@@ -75,8 +75,7 @@ class HPOTree:
         self.IC = None
         self.ICList = None
         self.nonPhenotypicTerms = set()
-        self.LinSimilarityMatrix = None
-        self.JCSimilarityMatrix = None
+        self.similarityMatrix = dict()
     
     def addHPO(self, HPONode):
         if (len(HPONode.parents) == 0 and HPONode.id != config.HPORoot):
@@ -102,19 +101,17 @@ class HPOTree:
         self.IC = HPOIC
         self.ICList = list(HPOIC.values())
     
-    def getSimilarity(self, node1, node2, type='Lin'):
-        if (node1.index == node2.index):
-            return 1
-        elif (node1.index < node2.index):
-            if (type == 'Lin'):
-                return self.LinSimilarityMatrix[node2.index, node1.index]
-            else:
-                return self.JCSimilarityMatrix[node2.index, node1.index]
+    def getSimilarity(self, node1, node2, similarityMethod='Lin'):
+        if (similarityMethod not in self.similarityMatrix.keys()):
+            IOUtils.showInfo('Invalid similarity algorithm', 'ERROR')
         else:
-            if (type == 'Lin'):
-                return self.LinSimilarityMatrix[node1.index, node2.index]
+            matrix = self.similarityMatrix.get(similarityMethod)
+            if (node1.index == node2.index):
+                return 1
+            elif (node1.index < node2.index):
+                return matrix[node2.index, node1.index]
             else:
-                return self.JCSimilarityMatrix[node1.index, node2.index]
+                return matrix[node1.index, node2.index]
 
     
     def postProcess(self):

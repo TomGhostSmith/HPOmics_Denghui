@@ -1,19 +1,34 @@
-taskType = 'disease'
-# taskType = 'gene'
+import multiprocessing
+
+# taskType = 'disease'
+taskType = 'gene'
+# ICType = 'disease'
+# ICType = 'gene'
+ICType = 'integrated'
+# similarityMethod = 'Lin'
+similarityMethod = 'JC'
+# similarityMethod = 'IC'
+
+# hardware settings
 GPUAvailable = False
+CPUCores = multiprocessing.cpu_count()
+supportFork = False
+
 
 # project paths
 projectPath = "."
-testsetName = "data3-Integrated-IC"
-splitResultPath = f"{projectPath}/splitResult/{testsetName}"
-resultPath = f"{projectPath}/result/{testsetName}"
-# resultPath = f"{projectPath}/result/PhenoProResult/{testsetName}"
-resultCSVPath = f"{projectPath}/result/{testsetName}Result.csv"
-# resultCSVPath = f"{projectPath}/result/PhenoProResult/{testsetName}Result.csv"
+datasetName = f"data10"
+taskName = f"{datasetName}({ICType},{similarityMethod})->{taskType}"
 dataPath = f"{projectPath}/data"
-patientPath = f"{projectPath}/patient/{testsetName}"
-# standardResultPath = f"{projectPath}/standardResult/{testsetName}"
-standardResultPath = f"{projectPath}/standardResult/data3"
+splitResultPath = f"{projectPath}/splitResult/{taskName}"
+
+resultCSVPath = f"{projectPath}/result/{taskName}_Result.csv"
+resultPath = f"{projectPath}/result/{taskName}"
+
+patientPath = f"/home/joy/Data/HPOmicsData/data/{datasetName}"
+standardResultPath = f"/home/joy/Data/HPOmicsData/standardResult/{datasetName}"
+# patientPath = f"{projectPath}/patient/{datasetName}"
+# standardResultPath = f"{projectPath}/standardResult/{datasetName}"
 
 # HPO version and anontations
 HPOVersion = "20231009"
@@ -33,9 +48,7 @@ ICFromDiseasePath = f"{dataPath}/preprocess/ICFromDisease_{HPOVersion}.json"
 ICFromGenePath = f"{dataPath}/preprocess/ICFromGene_{HPOVersion}.json"
 integratedICPath = f"{dataPath}/preprocess/integratedIC_{HPOVersion}.json"
 diseaseSynonymPath = f"{dataPath}/preprocess/diseaseSynonym.json"
-# MICAMatirxPath = f"{dataPath}/preprocess/MICAMatrix_{HPOVersion}.npz"
-# MICAMatirxPath = f"{dataPath}/preprocess/MICAMatrix_{HPOVersion}_Gene.npz"
-MICAMatirxPath = f"{dataPath}/preprocess/MICAMatrix_{HPOVersion}_Integrated.npz"
+MICAMatirxPath = f"{dataPath}/preprocess/MICAMatrix_{HPOVersion}_{ICType}.npz"
 
 phenoBrainPath = f"{dataPath}/PhenoBrain"
 phenoBrainCCRD2ORPHAPath = f"{phenoBrainPath}/ccrd_to_orpha.json"

@@ -14,7 +14,7 @@ def calcIndex(indexes):
         return numpy.min(indexes)
 
 def main():
-    files = os.listdir(config.standardResultPath)
+    files = sorted(os.listdir(config.standardResultPath))
     result = dict()
 
     MRR = 0
