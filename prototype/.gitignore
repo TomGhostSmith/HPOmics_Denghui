@@ -5,5 +5,5 @@ result/
 splitResult/
 standardResult/
 data/synonym/diseaseSynonym.json
-analysis/
+caseAnalysis/
 __pycache__/
