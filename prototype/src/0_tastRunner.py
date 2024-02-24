@@ -23,7 +23,8 @@ def preprocessTask(ICType, HPOVersion):
 
 def setAutoAnnotation():
     config.autoLoadAnnotation = True
-    HPOUtils.loadAll()
+    HPOUtils.loadIC()
+    HPOUtils.loadSimilarity()
     DiseaseUtils.reset()
     GeneUtils.reset()
     IOUtils.showInfo('Switch to evaluate mode')
@@ -37,28 +38,43 @@ def runTask(dataset, taskType, ICType, similarityMethod, HPOVersion):
     config.HPOVersion = HPOVersion
     config.resetPath()
     IOUtils.init()
+    HPOUtils.loadIC()  # similarity is all read in
     Phen2Disease.main()
     combine.main()
     evaluate.main()
 
+def runAll(dataset, taskType, HPOVersion):
+    runTask(dataset, taskType, ICType='disease', similarityMethod='Lin', HPOVersion=HPOVersion)
+    runTask(dataset, taskType, ICType='gene', similarityMethod='Lin', HPOVersion=HPOVersion)
+    runTask(dataset, taskType, ICType='integrated', similarityMethod='Lin', HPOVersion=HPOVersion)
+    runTask(dataset, taskType, ICType='disease', similarityMethod='JC', HPOVersion=HPOVersion)
+    runTask(dataset, taskType, ICType='gene', similarityMethod='JC', HPOVersion=HPOVersion)
+    runTask(dataset, taskType, ICType='integrated', similarityMethod='JC', HPOVersion=HPOVersion)
+    runTask(dataset, taskType, ICType='disease', similarityMethod='IC', HPOVersion=HPOVersion)
+    runTask(dataset, taskType, ICType='gene', similarityMethod='IC', HPOVersion=HPOVersion)
+    runTask(dataset, taskType, ICType='integrated', similarityMethod='IC', HPOVersion=HPOVersion)
+
+
 def main():
-    preprocessTask(ICType='disease', HPOVersion='20231009')
-    preprocessTask(ICType='gene', HPOVersion='20231009')
-    preprocessTask(ICType='integrated', HPOVersion='20231009')
+    # preprocessTask(ICType='disease', HPOVersion='20221005')
+    # preprocessTask(ICType='gene', HPOVersion='20221005')
+    # preprocessTask(ICType='integrated', HPOVersion='20221005')
     setAutoAnnotation()
-    runTask(dataset='data3', taskType='disease', ICType='disease', similarityMethod='Lin', HPOVersion='20231009')
-    runTask(dataset='data3', taskType='disease', ICType='gene', similarityMethod='Lin', HPOVersion='20231009')
-    runTask(dataset='data3', taskType='disease', ICType='integrated', similarityMethod='Lin', HPOVersion='20231009')
-    runTask(dataset='data3', taskType='disease', ICType='disease', similarityMethod='JC', HPOVersion='20231009')
-    runTask(dataset='data3', taskType='disease', ICType='gene', similarityMethod='JC', HPOVersion='20231009')
-    runTask(dataset='data3', taskType='disease', ICType='integrated', similarityMethod='JC', HPOVersion='20231009')
-    runTask(dataset='data3', taskType='disease', ICType='disease', similarityMethod='IC', HPOVersion='20231009')
-    runTask(dataset='data3', taskType='disease', ICType='gene', similarityMethod='IC', HPOVersion='20231009')
-    runTask(dataset='data3', taskType='disease', ICType='integrated', similarityMethod='IC', HPOVersion='20231009')
+    runAll('data10', 'gene', '20231009')
+    runAll('data10', 'gene', '20221005')
+    runAll('data6', 'gene', '20231009')
+    runAll('data6', 'gene', '20221005')
+    runAll('data5-1', 'gene', '20231009')
+    runAll('data5-1', 'gene', '20221005')
+    runAll('data5-2', 'gene', '20231009')
+    runAll('data5-2', 'gene', '20221005')
+    runAll('data5-3', 'gene', '20231009')
+    runAll('data5-3', 'gene', '20221005')
+    runAll('data4-1', 'gene', '20231009')
+    runAll('data4-1', 'gene', '20221005')
+    runAll('data3', 'disease', '20231009')
+    runAll('data3', 'disease', '20221005')
+
 
 if (__name__ == '__main__'):
-    preprocessTask(ICType='disease', HPOVersion='20231009')
-    setAutoAnnotation()
-    evaluate.main()
-    # runTask(dataset='data3', taskType='disease', ICType='disease', similarityMethod='Lin', HPOVersion='20231009')
-    # runTask(dataset='data6', taskType='gene', ICType='disease', similarityMethod='Lin', HPOVersion='20231009')
+    main()

@@ -137,11 +137,14 @@ def evaluate():
                     (task, index) = fileQueue.get()
                     # (task, index) = fileQueue.pop(0)
                     fileQueueLock.release()
-                    evaluateOne(task, index)
-                    IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}")
+                    evaluateOne(task)
+                    if (index < totalCount and index % 100 != 0):
+                        IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}", 'PROC')
+                    else:
+                        IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}")
                 os._exit(0)
             else:
-                IOUtils.showInfo(f'Forked subprocess with pid {pid}')
+                IOUtils.showInfo(f'Forked subprocess with pid {pid}', 'PROC')
                 childPIDList.append(pid)
         
         for pid in childPIDList:
@@ -150,7 +153,10 @@ def evaluate():
         while (not fileQueue.empty()):
             (task, index) = fileQueue.get()
             evaluateOne(task)
-            IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}")
+            if (index < totalCount and index % 100 != 0):
+                IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}", 'PROC')
+            else:
+                IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(task)}")
     
 
 

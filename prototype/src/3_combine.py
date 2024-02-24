@@ -82,7 +82,7 @@ def main():
                 combineFiles(files[startIndex:endIndex], config.resultPath)
                 os._exit(0)
             else:
-                IOUtils.showInfo(f'Forked subprocess with pid {pid}')
+                IOUtils.showInfo(f'Forked subprocess with pid {pid}', 'PROC')
                 childPIDList.append(pid)
         
         for pid in childPIDList:

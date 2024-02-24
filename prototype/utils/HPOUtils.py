@@ -17,11 +17,8 @@ class HPOUtil:
     def __init__(self) -> None:
         self.HPOTree = loadHPOTree()
         if (config.autoLoadAnnotation):
-            self.loadAll()
-    
-    def loadAll(self):
-        self.loadIC()
-        self.loadSimilarity()
+            self.loadIC()
+            self.loadSimilarity()
 
     def loadIC(self):
         IOUtils.showInfo("Loading IC")

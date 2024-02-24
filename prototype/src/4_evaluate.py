@@ -63,6 +63,7 @@ def main():
                 currentIndex += 1
                 if (line.split(',')[resultIndex].strip() in standardResults):
                     indexes.append(currentIndex)
+                    break
                 line = fp.readline().strip()
 
         if (len(indexes) == 0):
@@ -88,6 +89,7 @@ def main():
         res.append(f"{name},{index}\n")
 
     # output summary of this dataset
+    IOUtils.showInfo(f'Result for {config.taskName}')
     topsTitle = ""
     for threshold in config.focusTop:
         topsTitle += f'top {threshold}\t'

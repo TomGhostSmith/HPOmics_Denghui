@@ -9,18 +9,19 @@ class Config():
         self.ICType = 'disease'         # can be 'disease', 'gene', 'integrated'
         self.similarityMethod = 'Lin'   # can be 'Lin', 'JC', 'IC'
         self.HPOVersion = "20231009"    # can be 20231009, 20221005
-        self.autoLoadAnnotation = True # if True, then will load IC, similarity and annotations when init. Use True after preprocess
+        self.autoLoadAnnotation = False # if True, then will load IC, similarity and annotations when init. Use True after preprocess
 
         # output settings
         self.ignoreWarning = True
+        self.ignoreSmallProcess = True
 
         # evaluate settings
         self.focusTop = [1, 3, 5, 10, 20, 50, 100]
 
         # hardware settings
-        self.GPUAvailable = False
+        self.GPUAvailable = True
         self.CPUCores = multiprocessing.cpu_count()
-        self.supportFork = False
+        self.supportFork = True
 
         # special HPO terms settings
         self.HPORoot = 'HP:0000001'
@@ -65,17 +66,17 @@ class Config():
     
     def resetPath(self):
         # path settings
-        self.taskName = f"{self.datasetName}({self.ICType},{self.similarityMethod})-{self.taskType}"
+        self.taskName = f"{self.datasetName}({self.HPOVersion},{self.ICType},{self.similarityMethod})-{self.taskType}"
         self.dataPath = f"{self.projectPath}/data"
         self.splitResultPath = f"{self.projectPath}/splitResult/{self.taskName}"
 
         self.resultCSVPath = f"{self.projectPath}/result/{self.taskName}_Result.csv"
         self.resultPath = f"{self.projectPath}/result/{self.taskName}"
 
-        # patientPath = f"/home/joy/Data/HPOmicsData/data/{datasetName}"
-        # standardResultPath = f"/home/joy/Data/HPOmicsData/standardResult/{datasetName}"
-        self.patientPath = f"{self.projectPath}/patient/{self.datasetName}"
-        self.standardResultPath = f"{self.projectPath}/standardResult/{self.datasetName}"
+        self.patientPath = f"/home/joy/Data/HPOmicsData/data/{self.datasetName}"
+        self.standardResultPath = f"/home/joy/Data/HPOmicsData/standardResult/{self.datasetName}"
+        # self.patientPath = f"{self.projectPath}/patient/{self.datasetName}"
+        # self.standardResultPath = f"{self.projectPath}/standardResult/{self.datasetName}"
 
         # HPO version and anontation settings
         self.HPOTermFilePath = f"{self.dataPath}/HPO_obo/hp{self.HPOVersion}.obo"

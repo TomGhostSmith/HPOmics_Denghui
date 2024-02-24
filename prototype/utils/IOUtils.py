@@ -18,8 +18,13 @@ def checkdir(path):
 def showInfo(message, type='INFO'):
     if (type == 'WARN' and config.ignoreWarning == True):
         return
+    if (type == 'PROC' and config.ignoreSmallProcess):
+        return
     currentTime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-    print(f"{currentTime} ({os.getpid()}) [{type}] {message}")
+    msg = f"{currentTime} ({os.getpid()}) [{type}] {message}"
+    print(msg)
+    with open('/home/joy/Log/HPOmics', 'at') as fp:
+        fp.write(msg + '\n') 
 
 # create folders if not exists
 def init():
