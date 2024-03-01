@@ -23,7 +23,7 @@ def showInfo(message, type='INFO'):
     currentTime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     msg = f"{currentTime} ({os.getpid()}) [{type}] {message}"
     print(msg)
-    with open('/home/joy/Log/HPOmics', 'at') as fp:
+    with open('/home/joy/Log/hpomics', 'at') as fp:
         fp.write(msg + '\n') 
 
 # create folders if not exists

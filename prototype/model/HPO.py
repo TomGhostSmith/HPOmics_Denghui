@@ -10,15 +10,15 @@ import utils.IOUtils as IOUtils
 
 class HPO:
     def __init__(self) -> None:
-        self.id = None
-        self.name = None
-        self.index = 0
+        self.id = None              # e.g. HP:xxxxxxx
+        self.name = None            # e.g. headache
+        self.index = 0              # index is a number indicating its position in array
         self.parents = set()        # parent is a set of term id, which do not include itself
         self.children = set()       # children is a set of term id, which do not include itself
         self.alternates = set()     # alternates is a set of term id replaced by this term
         self.ancestors = set()      # ancestors is a set of term id, which includes parents, grandparents, etc.
         self.descendants = set()    # descendants is a set of term id, which includes children, grandchildren, etc.
-        self.ancestorIndexs = set()
+        self.ancestorIndexs = set()   # ancestor indexes, include itself
         # self.ancestorMask = None    # an array full of 0 and 1. 1 means this index of HPO is the ancestor. include itself
         # self.descendantMask = None  # an array full of 0 and 1. 1 means this index of HPO is the descendant. include itself
         self.info = {}
@@ -107,11 +107,17 @@ class HPOTree:
         else:
             matrix = self.similarityMatrix.get(similarityMethod)
             if (node1.index == node2.index):
-                return 1
+                res = 1
             elif (node1.index < node2.index):
-                return matrix[node2.index, node1.index]
+                res = matrix[node2.index, node1.index]
             else:
-                return matrix[node1.index, node2.index]
+                res = matrix[node1.index, node2.index]
+            return res
+            if (numpy.isinf(res) or numpy.isnan(res)):
+                IOUtils.showInfo('similarity is not a number', 'ERROR')
+                return 0
+            else:
+                return res
 
     
     def postProcess(self):

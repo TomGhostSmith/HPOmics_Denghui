@@ -9,11 +9,11 @@ from utils.HPOUtils import HPOUtils
 from model.Patient import Patient
 
 class Disease:
-    def __init__(self, id, name, relatedHPONodes, totalIC, diseaseType) -> None:
+    def __init__(self, id, name, relatedHPONodes, totalIC, diseaseType, relatedGenes) -> None:
         self.id = id         # disease id, like OMIM:xxxxxx
         self.name = name     # disease name
-        self.relatedHPONodes = relatedHPONodes
-        self.relatedGeneList = None
+        self.relatedHPONodes = relatedHPONodes  # a set of related HPO nodes
+        self.relatedGenes = relatedGenes
         self.totalIC = totalIC
         self.type = diseaseType
     

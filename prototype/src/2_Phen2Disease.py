@@ -23,13 +23,24 @@ def evaluateOne(file):
     # extract HPO term and replace old term with new
     with open(file=f"{config.patientPath}/{file}", mode='rt', encoding='utf-8') as fp:
         HPOList, totalIC = HPOUtils.extractPreciseHPONodes(fp.readlines())
+        # test: use all ancestors
+        # HPOInput = fp.readlines()
+        # totalIC = 0
+        # HPOList = set()
+        # HPONodes = list(HPOUtils.HPOTree.HPOList.values())
+        # for HPOTerm in HPOInput:
+        #     validNode = HPOUtils.HPOTree.getHPO(HPOTerm.strip())
+        #     if (validNode != None):
+        #         HPOList.add(validNode)
+        #         for ancestorIndex in validNode.ancestorIndexs:
+        #             HPOList.add(HPONodes[ancestorIndex])
+        # for HPONode in HPOList:
+        #     totalIC += HPOUtils.HPOTree.ICList[HPONode.index]
     
     patient = Patient(fileName=fileName, HPOList=HPOList, info=None, taskType=config.taskType, totalIC=totalIC)  # info can be used in the future
 
-    if (patient.taskType == 'disease'):
-        DiseaseUtils.evaluate(patient)
-    else:
-        GeneUtils.evaluate(patient)
+    DiseaseUtils.evaluate(patient)
+    GeneUtils.evaluate(patient)
 
     with open(file=f'{config.splitResultPath}/{fileName}.csv', mode='wt', encoding='utf-8') as fp:
         fp.writelines(patient.getResult())
@@ -41,8 +52,9 @@ def evaluate():
     totalCount = len(patientFiles)
 
     # start and end index can be modified to skip some patient
+    # startIndex = 163
     startIndex = 0
-    # endIndex = 1
+    # endIndex = 164
     endIndex = len(patientFiles)
 
     # pool = multiprocessing.Pool(multiprocessing.cpu_count())
@@ -60,13 +72,13 @@ def evaluate():
         # skip folders
         if (os.path.isdir(f"{config.patientPath}/{file}")):
             processedCount += 1
-            IOUtils.showInfo(f"[{processedCount}/{totalCount}] Skipped folder {str(file)}")
+            IOUtils.showInfo(f"[{processedCount}/{totalCount}] Skipped folder {str(file)}", 'PROC')
             continue
 
         # check index to skip some patients do not need to process
         if (processedCount < startIndex or processedCount >= endIndex):
             processedCount += 1
-            IOUtils.showInfo(f"[{processedCount}/{totalCount}] Skipped file {str(file)}")
+            # IOUtils.showInfo(f"[{processedCount}/{totalCount}] Skipped file {str(file)}", 'PROC')
             continue
 
 
@@ -82,23 +94,6 @@ def evaluate():
         #     HPOList, totalIC = HPOUtils.extractPreciseHPONodes(HPOTree, fp.readlines())
         
         # patient = Patient(fileName=fileName, HPOList=HPOList, info=None, taskType=config.taskType, totalIC=totalIC)  # info can be used in the future
-
-        
-
-
-            # test: use all ancestors
-            # HPOInput = fp.readlines()
-            # totalIC = 0
-            # HPOList = set()
-            # HPONodes = list(HPOTree.HPOList.values())
-            # for HPOTerm in HPOInput:
-            #     validNode = HPOTree.getHPO(HPOTerm.strip())
-            #     if (validNode != None):
-            #         HPOList.add(validNode)
-            #         for ancestorIndex in validNode.ancestorIndexs:
-            #             HPOList.add(HPONodes[ancestorIndex])
-            # for HPONode in HPOList:
-            #     totalIC += HPOTree.ICList[HPONode.index]
         
 
         # can be modified to execute disease task and gene task customly
