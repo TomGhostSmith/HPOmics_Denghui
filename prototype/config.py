@@ -9,18 +9,21 @@ class Config():
         self.ICType = 'disease'         # can be 'disease', 'gene', 'integrated'
         self.similarityMethod = 'Lin'   # can be 'Lin', 'JC', 'IC'
         self.HPOVersion = "20231009"    # can be 20231009, 20221005
-        self.autoLoadAnnotation = True # if True, then will load IC, similarity and annotations when init. Use True after preprocess
+        self.autoLoadAnnotation = False # if True, then will load IC, similarity and annotations when init. Use True after preprocess
+        self.useSynonym = False
 
         # output settings
         self.ignoreWarning = True
+        self.ignoreSmallProcess = True
 
         # evaluate settings
         self.focusTop = [1, 3, 5, 10, 20, 50, 100]
 
         # hardware settings
-        self.GPUAvailable = False
+        # note: in cupy, matrix division has some problem and will lead to NaN or inf
+        self.GPUAvailable = False   # should be False
         self.CPUCores = multiprocessing.cpu_count()
-        self.supportFork = False
+        self.supportFork = True
 
         # special HPO terms settings
         self.HPORoot = 'HP:0000001'
@@ -64,18 +67,26 @@ class Config():
         self.resetPath()
     
     def resetPath(self):
+        # set appendix for use synonym or not
+        if (not self.useSynonym):
+            appendix = '_noSynonym'
+        else:
+            appendix = ''
         # path settings
-        self.taskName = f"{self.datasetName}({self.ICType},{self.similarityMethod})-{self.taskType}"
+        # self.taskName = f"{self.datasetName}({self.HPOVersion},{self.ICType},{self.similarityMethod})-{self.taskType}"
+        # self.taskName = f"{self.datasetName}({self.HPOVersion},{self.ICType},{self.similarityMethod})-{self.taskType}_both_addAncestor"
+        self.taskName = f"{self.datasetName}({self.HPOVersion},{self.ICType},{self.similarityMethod})-{self.taskType}_both_addAncestor{appendix}"
         self.dataPath = f"{self.projectPath}/data"
+        # self.splitResultPath = f"{self.projectPath}/splitResult/{self.taskName}"
         self.splitResultPath = f"{self.projectPath}/splitResult/{self.taskName}"
 
         self.resultCSVPath = f"{self.projectPath}/result/{self.taskName}_Result.csv"
         self.resultPath = f"{self.projectPath}/result/{self.taskName}"
 
-        # patientPath = f"/home/joy/Data/HPOmicsData/data/{datasetName}"
-        # standardResultPath = f"/home/joy/Data/HPOmicsData/standardResult/{datasetName}"
-        self.patientPath = f"{self.projectPath}/patient/{self.datasetName}"
-        self.standardResultPath = f"{self.projectPath}/standardResult/{self.datasetName}"
+        self.patientPath = f"/home/joy/Data/HPOmicsData/data/{self.datasetName}"
+        self.standardResultPath = f"/home/joy/Data/HPOmicsData/standardResult/{self.datasetName}"
+        # self.patientPath = f"{self.projectPath}/patient/{self.datasetName}"
+        # self.standardResultPath = f"{self.projectPath}/standardResult/{self.datasetName}"
 
         # HPO version and anontation settings
         self.HPOTermFilePath = f"{self.dataPath}/HPO_obo/hp{self.HPOVersion}.obo"
@@ -83,17 +94,24 @@ class Config():
         self.disease2PhenotypeAnnotationPath = f"{self.dataPath}/annotation/phenotype_{self.HPOVersion}.hpoa"
         # phenotype2GeneAnnotationPath = f"{dataPath}/annotation/phenotype_to_gene_{HPOVersion}.txt"
         self.diseaseSynonymAnnotationPath = f"{self.dataPath}/synonym/diseaseSynonym.json"
+        self.gene2DiseaseAnnotationPath = f"{self.dataPath}/annotation/genes_to_disease_{self.HPOVersion}.txt"
 
         # preprocess files settings
-        self.geneListPath = f"{self.dataPath}/preprocess/geneList_{self.HPOVersion}.txt"
-        self.diseaseListPath = f"{self.dataPath}/preprocess/diseaseList_{self.HPOVersion}.txt"
-        self.gene2PhenotypeJsonPath = f"{self.dataPath}/preprocess/gene2phenotype_{self.HPOVersion}.json"
-        self.disease2PhenotypeJsonPath = f"{self.dataPath}/preprocess/disease2phenotype_{self.HPOVersion}.json"
-        self.ICFromDiseasePath = f"{self.dataPath}/preprocess/ICFromDisease_{self.HPOVersion}.json"
-        self.ICFromGenePath = f"{self.dataPath}/preprocess/ICFromGene_{self.HPOVersion}.json"
-        self.integratedICPath = f"{self.dataPath}/preprocess/integratedIC_{self.HPOVersion}.json"
-        self.diseaseSynonymPath = f"{self.dataPath}/preprocess/diseaseSynonym.json"
-        self.MICAMatirxPath = f"{self.dataPath}/preprocess/MICAMatrix_{self.HPOVersion}_{self.ICType}.npz"
+        self.geneListPath = f"{self.dataPath}/preprocess/geneList_{self.HPOVersion}{appendix}.txt"
+        self.diseaseListPath = f"{self.dataPath}/preprocess/diseaseList_{self.HPOVersion}{appendix}.txt"
+        self.gene2PhenotypeJsonPath = f"{self.dataPath}/preprocess/gene2phenotype_{self.HPOVersion}{appendix}.json"
+        self.disease2PhenotypeJsonPath = f"{self.dataPath}/preprocess/disease2phenotype_{self.HPOVersion}{appendix}.json"
+        self.disease2GeneJsonPath = f"{self.dataPath}/preprocess/disease2Gene_{self.HPOVersion}{appendix}.json"
+        self.gene2DiseaseJsonPath = f"{self.dataPath}/preprocess/gene2Disease_{self.HPOVersion}{appendix}.json"
+        self.diseaseICPath = f"{self.dataPath}/preprocess/diseaseIC_{self.HPOVersion}{appendix}.json"
+        self.phrankDiseaseICPath = f"{self.dataPath}/preprocess/phrankDiseaseIC_{self.HPOVersion}{appendix}.json"
+        self.geneICPath = f"{self.dataPath}/preprocess/geneIC_{self.HPOVersion}{appendix}.json"
+        self.phrankGeneICPath = f"{self.dataPath}/preprocess/phrankGeneIC_{self.HPOVersion}{appendix}.json"
+        self.integratedICPath = f"{self.dataPath}/preprocess/integratedIC_{self.HPOVersion}{appendix}.json"
+        self.phrankIntegratedICPath = f"{self.dataPath}/preprocess/phrankIntegratedIC_{self.HPOVersion}{appendix}.json"
+        self.currentUseICPath = f"{self.dataPath}/preprocess/{self.ICType}IC_{self.HPOVersion}{appendix}.json"
+        self.diseaseSynonymPath = f"{self.dataPath}/preprocess/diseaseSynonym{appendix}.json"
+        self.MICAMatirxPath = f"{self.dataPath}/preprocess/MICAMatrix_{self.HPOVersion}_{self.ICType}{appendix}.npz"
 
         # other settings
         self.phenoBrainPath = f"{self.dataPath}/PhenoBrain"

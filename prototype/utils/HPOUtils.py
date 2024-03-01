@@ -17,23 +17,13 @@ class HPOUtil:
     def __init__(self) -> None:
         self.HPOTree = loadHPOTree()
         if (config.autoLoadAnnotation):
-            self.loadAll()
-    
-    def loadAll(self):
-        self.loadIC()
-        self.loadSimilarity()
+            self.loadIC()
+            self.loadSimilarity()
 
     def loadIC(self):
         IOUtils.showInfo("Loading IC")
-        if (config.ICType == 'disease'):
-            with open(file=config.ICFromDiseasePath, mode='rt', encoding='utf-8') as fp:
-                self.HPOTree.setIC(json.load(fp))
-        elif (config.ICType == 'gene'):
-            with open(file=config.ICFromGenePath, mode='rt', encoding='utf-8') as fp:
-                self.HPOTree.setIC(json.load(fp))
-        else:
-            with open(file=config.integratedICPath, mode='rt', encoding='utf-8') as fp:
-                self.HPOTree.setIC(json.load(fp))
+        with open(file=config.currentUseICPath, mode='rt', encoding='utf-8') as fp:
+            self.HPOTree.setIC(json.load(fp))
 
     def loadSimilarity(self):
         """
@@ -54,23 +44,24 @@ class HPOUtil:
         For each pair of term (x, y), sim(x, y) = (2 * MICA(x, y).IC / (x.IC + y.IC)) * (1 / 1 - MICA(x, y))
         """
         IOUtils.showInfo("Loading similarity")
+        self.HPOTree.similarityMatrix = dict()
         ICList = self.HPOTree.ICList
         MICAMatrix = numpy.load(config.MICAMatirxPath)['MICAMatrix']
         if (config.GPUAvailable):
             ICArray = cupy.array(ICList)
-            denominatorMatrx = ICArray[:, cupy.newaxis] + ICArray[cupy.newaxis, :]  
+            denominatorMatrix = ICArray[:, cupy.newaxis] + ICArray[cupy.newaxis, :]  
             MICAMatrix = cupy.array(MICAMatrix)
-            LinSimilarityMatrix = cupy.divide(MICAMatrix * 2, denominatorMatrx)
-            JCSimilarityMatrix = cupy.divide(1, 1 + denominatorMatrx - MICAMatrix * 2)
+            LinSimilarityMatrix = cupy.divide(MICAMatrix * 2, denominatorMatrix)
+            JCSimilarityMatrix = cupy.divide(1, 1 + denominatorMatrix - MICAMatrix * 2)
             ICSimilarityMatrix = cupy.multiply(LinSimilarityMatrix, 1 - cupy.divide(1, 1 + MICAMatrix))
             LinSimilarityMatrix = LinSimilarityMatrix.get()
             JCSimilarityMatrix = JCSimilarityMatrix.get()
             ICSimilarityMatrix = ICSimilarityMatrix.get()
         else:
             ICArray = numpy.array(ICList)
-            denominatorMatrx = ICArray[:, None] + ICArray[None, :]  
-            LinSimilarityMatrix = numpy.divide(MICAMatrix * 2, denominatorMatrx, out=numpy.zeros_like(denominatorMatrx), where=denominatorMatrx != 0)
-            JCSimilarityMatrix = numpy.divide(1, 1 + denominatorMatrx - MICAMatrix * 2)
+            denominatorMatrix = ICArray[:, None] + ICArray[None, :]  
+            LinSimilarityMatrix = numpy.divide(MICAMatrix * 2, denominatorMatrix, out=numpy.zeros_like(denominatorMatrix), where=denominatorMatrix != 0)
+            JCSimilarityMatrix = numpy.divide(1, 1 + denominatorMatrix - MICAMatrix * 2)
             ICSimilarityMatrix = numpy.multiply(LinSimilarityMatrix, 1 - numpy.divide(1, 1 + MICAMatrix))
         
         # test: make all ancestor-descendant similarity = 1

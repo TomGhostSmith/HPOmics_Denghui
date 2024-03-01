@@ -8,11 +8,11 @@ from config import config
 import model.Patient as Patient
 
 class Gene:
-    def __init__(self, id, name, relatedHPONodes, totalIC, geneType) -> None:
+    def __init__(self, id, name, relatedHPONodes, totalIC, geneType, relatedDiseases) -> None:
         self.id = id      # NCBI gene id
         self.name = name  # gene symbol, which can be a list
-        self.relatedHPONodes = relatedHPONodes
-        self.relatedDiseaseList = None
+        self.relatedHPONodes = relatedHPONodes   # a set of related HPO nodes
+        self.relatedDiseases = relatedDiseases   # a list of related disease terms
         self.totalIC = totalIC
         self.type = geneType
     

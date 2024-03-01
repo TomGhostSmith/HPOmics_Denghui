@@ -38,16 +38,54 @@ def calcSynonymDisease():
     with open(file=config.phenoBrainCCRD2ORPHAPath, mode='rt', encoding='utf-8') as fp:
         synonyms = json.load(fp)
     for (CCRDTerm, values) in synonyms.items():
-        diseaseSynonymMap[CCRDTerm] = set()
+        diseaseSynonymMap[CCRDTerm] = list()
         for group in values:
             ORPHATerm = group[0]
             OMIMTerm = diseaseSynonymMap.get(ORPHATerm)
             if (OMIMTerm == None):
-                diseaseSynonymMap[CCRDTerm].add(ORPHATerm)
+                diseaseSynonymMap[CCRDTerm].append(ORPHATerm)
             else:
-                diseaseSynonymMap[CCRDTerm].add(OMIMTerm)
+                diseaseSynonymMap[CCRDTerm].append(OMIMTerm)
+    
+    with open(file=config.diseaseSynonymPath, mode='wt', encoding='utf-8') as fp:
+        json.dump(obj=diseaseSynonymMap, fp=fp, indent=2, sort_keys=True)
 
-    return diseaseSynonymMap
+def calcGeneDiseaseMapJson():
+    IOUtils.showInfo('Calculating gene - disease mapping json')
+    gene2Disease = dict()
+    disease2Gene = dict()
+    with open(file=config.gene2DiseaseAnnotationPath, mode='rt', encoding='utf-8') as fp:
+        fp.readline()  # skip the first line (title line)
+
+        line = fp.readline()
+        while (line):
+            termsInLine = line.strip().split('\t')
+            if (len(termsInLine) > 3):
+                geneSymbol = termsInLine[1]
+                diseaseID = termsInLine[3]
+
+                if (geneSymbol != '-' and diseaseID != '-'):  # add map only when gene and disease are both known
+                    if (gene2Disease.get(geneSymbol) == None):
+                        gene2Disease[geneSymbol] = set()
+                    if (disease2Gene.get(diseaseID) == None):
+                        disease2Gene[diseaseID] = set()
+                    
+                    gene2Disease[geneSymbol].add(diseaseID)
+                    disease2Gene[diseaseID].add(geneSymbol)
+            
+            line = fp.readline()
+    
+    for (key, value) in gene2Disease.items():
+        gene2Disease[key] = list(value)
+    
+    for (key, value) in disease2Gene.items():
+        disease2Gene[key] = list(value)
+    
+    with open(file=config.gene2DiseaseJsonPath, mode='wt', encoding='utf-8') as fp:
+        json.dump(obj=gene2Disease, fp=fp, indent=2, sort_keys=True)
+    
+    with open(file=config.disease2GeneJsonPath, mode='wt', encoding='utf-8') as fp:
+        json.dump(obj=disease2Gene, fp=fp, indent=2, sort_keys=True)
 
 def calcGene2PhenotypeJson():
     IOUtils.showInfo("Calculating gene to phenotype json.")
@@ -97,7 +135,10 @@ def calcGene2PhenotypeJson():
     
 
 
-def calcDisease2PhenotypeJson(diseaseSynonymMap):
+def calcDisease2PhenotypeJson():
+    # test: ignore synonyms
+
+    
     IOUtils.showInfo("Calculating disease to phenotype json.")
     disease2Phenotype = dict()
     # operating HPO annotation from OMIM
@@ -111,12 +152,14 @@ def calcDisease2PhenotypeJson(diseaseSynonymMap):
                     termsInLine = line.strip().split('\t')
                     if (len(termsInLine) >= 4):
                         diseaseId = termsInLine[0]
-                        if (diseaseId.startswith('ORPHA')):
-                            OMIMId = diseaseSynonymMap.get(diseaseId)
-                            if (OMIMId != None):
-                                diseaseId = OMIMId
-                            # else:
-                                # IOUtils.showInfo(f"Cannot find OMIM code for {diseaseId}")
+
+                        # test: replace ORPHA disease with OMIM. This might influence prediction of gene, so discard this test
+                        # if (diseaseId.startswith('ORPHA')):
+                        #     OMIMId = diseaseSynonymMap.get(diseaseId)
+                        #     if (OMIMId != None):
+                        #         diseaseId = OMIMId
+                        #     # else:
+                        #         # IOUtils.showInfo(f"Cannot find OMIM code for {diseaseId}")
                         diseaseName = termsInLine[1]
                         phenotype = termsInLine[3]
 
@@ -179,9 +222,7 @@ def calcTermICWithDisease():
     diseaseCount = len(diseaseList)
     
     # init with HPOList in case there is some HPO not show up in annotation
-    HPO2Disease = {}
-    for HPOTerm in HPOUtils.HPOTree.getValidHPOTermList():
-        HPO2Disease[HPOTerm] = set()
+    HPO2Disease = {HPOTerm: set() for HPOTerm in HPOUtils.HPOTree.getValidHPOTermList() }
     for (disease, diseaseDesc) in disease2HPO.items():
         for HPOTerm in diseaseDesc['phenotypeList']:
             currentNode = HPOUtils.HPOTree.getHPO(HPOTerm)
@@ -192,11 +233,26 @@ def calcTermICWithDisease():
     # note: diseaseListForOneHPO may be empty if there is no annotation for this HPO term.
     diseaseIC = {HPO: (-math.log2(len(diseaseListForOneHPO) / diseaseCount)) if len(diseaseListForOneHPO) > 0 else 0
                   for (HPO, diseaseListForOneHPO) in HPO2Disease.items()}
+
+    phrankDiseaseIC = dict()
+    for HPONode in HPOUtils.HPOTree.HPOList.values():
+        parentRelatedDiseases = set()
+        for parentTerm in HPONode.parents:
+            parentRelatedDiseases |= HPO2Disease[parentTerm]
+        diseaseCountForOne = len(HPO2Disease[HPONode.id])
+        if (HPONode.id == config.HPORoot):
+            phrankDiseaseIC[HPONode.id] = 0
+        else:
+            phrankDiseaseIC[HPONode.id] = -math.log2(diseaseCountForOne/len(parentRelatedDiseases)) if diseaseCountForOne > 0 else 0
+
     
-    with open(file=config.ICFromDiseasePath, mode='wt', encoding='utf-8') as fp:
+    with open(file=config.diseaseICPath, mode='wt', encoding='utf-8') as fp:
         json.dump(obj=diseaseIC, fp=fp, indent=2, sort_keys=True)
     
-    return diseaseIC
+    with open(file=config.phrankDiseaseICPath, mode='wt', encoding='utf-8') as fp:
+        json.dump(obj=phrankDiseaseIC, fp=fp, indent=2, sort_keys=True)
+    
+    return diseaseIC, phrankDiseaseIC
     
 
 def calcTermICWithGene():
@@ -223,10 +279,26 @@ def calcTermICWithGene():
     geneIC = {HPO: (-math.log2(len(geneListForOneHPO) / geneCount)) if len(geneListForOneHPO) > 0 else 0
                   for (HPO, geneListForOneHPO) in HPO2Gene.items()}
     
-    with open(file=config.ICFromGenePath, mode='wt', encoding='utf-8') as fp:
+
+    phrankGeneIC = dict()
+    for HPONode in HPOUtils.HPOTree.HPOList.values():
+        parentRelatedGenes = set()
+        for parentTerm in HPONode.parents:
+            parentRelatedGenes |= HPO2Gene[parentTerm]
+        geneCountForOne = len(HPO2Gene[HPONode.id])
+        if (HPONode.id == config.HPORoot):
+            phrankGeneIC[HPONode.id] = 0
+        else:
+            phrankGeneIC[HPONode.id] = -math.log2(geneCountForOne/len(parentRelatedGenes)) if geneCountForOne > 0 else 0
+
+    
+    with open(file=config.geneICPath, mode='wt', encoding='utf-8') as fp:
         json.dump(obj=geneIC, fp=fp, indent=2, sort_keys=True)
 
-    return geneIC
+    with open(file=config.phrankGeneICPath, mode='wt', encoding='utf-8') as fp:
+        json.dump(obj=phrankGeneIC, fp=fp, indent=2, sort_keys=True)
+
+    return geneIC, phrankGeneIC
 
 def calcIntegratedIC(diseaseIC, geneIC):
     IOUtils.showInfo("Calculating Integrated IC.")
@@ -240,10 +312,7 @@ def calcIntegratedIC(diseaseIC, geneIC):
         elif (geneICForTerm == 0):
             integratedIC[HPOTerm] = diseaseICForTerm
         else:
-            integratedIC[HPOTerm] = math.sqrt(diseaseICForTerm * geneICForTerm)
-
-    with open(file=config.integratedICPath, mode='wt', encoding='utf-8') as fp:
-        json.dump(obj=integratedIC, fp=fp, indent=2, sort_keys=True)
+            integratedIC[HPOTerm] = (diseaseICForTerm + geneICForTerm)/2
     
     return integratedIC
 
@@ -268,23 +337,39 @@ def calcMICAMatrix():
 
 
 def main():
-    diseaseSynonymMap = calcSynonymDisease()
+    calcSynonymDisease()
     IOUtils.showInfo("Start preprocessing...")
+    calcGeneDiseaseMapJson()
     calcGene2PhenotypeJson()
-    calcDisease2PhenotypeJson(diseaseSynonymMap)
-    diseaseIC = calcTermICWithDisease()
-    geneIC = calcTermICWithGene()
+    calcDisease2PhenotypeJson()
+    diseaseIC, phrankDiseaseIC = calcTermICWithDisease()
+    geneIC, phrankGeneIC = calcTermICWithGene()
     integratedIC = calcIntegratedIC(diseaseIC, geneIC)
+    with open(file=config.integratedICPath, mode='wt', encoding='utf-8') as fp:
+        json.dump(obj=integratedIC, fp=fp, indent=2, sort_keys=True)
+    phrankIntegratedIC = calcIntegratedIC(phrankDiseaseIC, phrankGeneIC)
+    with open(file=config.phrankIntegratedICPath, mode='wt', encoding='utf-8') as fp:
+        json.dump(obj=phrankIntegratedIC, fp=fp, indent=2, sort_keys=True)
     if (config.ICType == 'disease'):
         HPOUtils.HPOTree.setIC(diseaseIC)
     elif (config.ICType == 'gene'):
         HPOUtils.HPOTree.setIC(geneIC)
-    else:
+    elif (config.ICType == 'integrated'):
         HPOUtils.HPOTree.setIC(integratedIC)
+    elif (config.ICType == 'phrankDisease'):
+        HPOUtils.HPOTree.setIC(phrankDiseaseIC)
+    elif (config.ICType == 'phrankGene'):
+        HPOUtils.HPOTree.setIC(phrankGeneIC)
+    elif (config.ICType == 'phrankIntegrated'):
+        HPOUtils.HPOTree.setIC(phrankIntegratedIC)
+    else:
+        IOUtils.showInfo(f'Invalid IC type: {config.ICType}', 'ERROR')
+        exit()
     calcMICAMatrix()
 
     IOUtils.showInfo("Preprocess finished.")
 
 
 if (__name__ == '__main__'):
-    main()
+    # main()
+    calcSynonymDisease()

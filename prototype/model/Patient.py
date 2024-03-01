@@ -3,7 +3,8 @@ class Patient:
         self.fileName = fileName
         self.HPOList = HPOList
         self.info = info
-        self.results = None
+        self.diseaseResults = None
+        self.geneResults = None
         self.taskType = taskType
         self.totalIC = totalIC
     
@@ -11,12 +12,10 @@ class Patient:
     def getResult(self):
         result = list()
         result.append('id, name, disease2Patient, patient2Disease, diseaseIC, patientIC\n')
-        if (self.taskType == 'disease'):
-            for (disease, score) in self.results.items():
-                # result.append(f'{disease.id}, {str(disease.name).replace(",", " ")}, {score}\n')
-                result.append(f'{disease.id}, , {score}\n')
-        else:
-            for (gene, score) in self.results.items():
-                result.append(f'{gene.id}, {str(gene.name[0]).replace(",", " ")}, {score}\n')
+        for (disease, score) in self.diseaseResults.items():
+            # result.append(f'{disease.id}, {str(disease.name).replace(",", " ")}, {score}\n')
+            result.append(f'{disease.id},,{score}\n')
+        for (gene, score) in self.geneResults.items():
+            result.append(f'{gene.id},{str(gene.name[0]).replace(",", " ")},{score}\n')
 
         return result
