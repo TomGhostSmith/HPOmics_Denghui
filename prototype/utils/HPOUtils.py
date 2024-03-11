@@ -16,9 +16,6 @@ if (config.GPUAvailable):
 class HPOUtil:
     def __init__(self) -> None:
         self.HPOTree = loadHPOTree()
-        if (config.autoLoadAnnotation):
-            self.loadIC()
-            self.loadSimilarity()
 
     def loadIC(self):
         IOUtils.showInfo("Loading IC")
@@ -65,7 +62,7 @@ class HPOUtil:
             ICSimilarityMatrix = numpy.multiply(LinSimilarityMatrix, 1 - numpy.divide(1, 1 + MICAMatrix))
         
         # test: make all ancestor-descendant similarity = 1
-        # for HPONode in HPOTree.HPOList.values():
+        # for HPONode in HPOTree.nodes:
         #     thisIndex = HPONode.index
         #     ancestorIndexs = HPONode.ancestorIndexs
         #     for ancestorIndex in ancestorIndexs:

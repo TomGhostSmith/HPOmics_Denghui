@@ -4,6 +4,9 @@ patient/
 result/
 splitResult/
 standardResult/
+CADDResult/
 data/synonym/diseaseSynonym.json
 caseAnalysis/
 __pycache__/
+.snakemake/
+nohup.out

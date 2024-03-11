@@ -20,6 +20,7 @@ class GeneList:
     def __init__(self) -> None:
         self.geneIDMap = dict()  # key: disease id, value: disease node
         self.geneSymbolMap = dict()  # key: disease id, value: disease node
+        self.geneLink = None
 
     def addGene(self, gene):
         self.geneIDMap[gene.id] = gene
@@ -37,3 +38,21 @@ class GeneList:
         if (result == None):
             IOUtils.showInfo(f'cannot find gene with name {geneName}', 'WARN')
         return result
+    
+    # def searchGene(self, nameOrId):
+    #     try:
+    #         geneID = int(nameOrId)
+    #         return self.searchGeneByID(geneID)
+    #     except:
+    #         geneName = nameOrId
+    #         return self.searchGeneByName(geneName)
+
+    def getRelatedGenes(self, gene):   # param gene should be a Gene object
+        geneID = gene.id
+        geneName = gene.name
+        relatedGenes = self.geneLink.get(geneID)
+        if (relatedGenes == None):
+            relatedGenes = self.geneLink.get(geneName)
+            if (relatedGenes == None):
+                relatedGenes = dict()
+        return relatedGenes

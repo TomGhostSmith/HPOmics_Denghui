@@ -27,8 +27,19 @@ def showInfo(message, type='INFO'):
         fp.write(msg + '\n') 
 
 # create folders if not exists
-def init():
-    showInfo(f'Task: {config.taskName}. Use GPU: {config.GPUAvailable}. CPU Cores: {config.CPUCores}. Use fork: {config.supportFork}')
+def init(stage):
+    showInfo('--------------------------------------------------------------------------')
+    showInfo(f'Use GPU: {config.GPUAvailable}. CPU Cores: {config.CPUCores}. Use fork: {config.supportFork}.', 'CONFIG')
+    if (stage == 1):
+        showInfo(f'Extract annotation: {config.datasetParams}', 'TASK')
+    elif (stage == 2):
+        showInfo(f'Preprocess: {config.datasetParams}{config.dsSpecificParams}', 'TASK')
+    elif (stage == 3):
+        showInfo(f'Precalculate: {config.datasetParams}{config.taskParams}', 'TASK')
+    elif (stage == 4):
+        showInfo(f'Calculate: {config.calculateParams}', 'TASK')
+    elif (stage == 5):
+        showInfo(f'Combine: {config.combineParams}', 'TASK')
     folders = [
         config.projectPath,
         config.splitResultPath,
@@ -40,4 +51,3 @@ def init():
     ]
     for folder in folders:
         checkdir(folder)
-init()

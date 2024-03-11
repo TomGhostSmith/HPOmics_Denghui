@@ -11,15 +11,13 @@ import utils.IOUtils as IOUtils
 class DiseaseUtil:
     def __init__(self) -> None:
         self.diseaseList = None
-        self.reset()
     
     def reset(self):
-        if (config.autoLoadAnnotation):
-            self.diseaseList = loadDiseases()
+        self.diseaseList = loadDiseases()
 
     def evaluate(self, patient):
         if (self.diseaseList == None):
-            IOUtils.showInfo('Annotations not loaded. Please run preprocess.py and set config.autoLoadAnnotation to True', 'ERROR')
+            IOUtils.showInfo('Annotations not loaded.', 'ERROR')
             exit()
         scores = dict()
 
@@ -39,23 +37,22 @@ def loadDiseases():
     with open(file=config.disease2GeneJsonPath, mode='rt', encoding='utf-8') as fp:
         disease2GeneJson = json.load(fp)
     for (id, disease) in disease2PhenotypeJson.items():
-        # relatedHPONodes, totalIC = HPOUtils.extractPreciseHPONodes(disease['phenotypeList'])
+        if (config.useAncestor == 'target' or config.useAncestor == 'both'):
+            HPOInput = disease['phenotypeList']
+            totalIC = 0
+            HPOList = set()
+            for HPOTerm in HPOInput:
+                validNode = HPOUtils.HPOTree.getHPO(HPOTerm.strip())
+                if (validNode != None):
+                    HPOList.add(validNode)
+                    for ancestorIndex in validNode.ancestorIndexs:
+                        HPOList.add(HPOUtils.HPOTree.nodes[ancestorIndex])
+            for HPONode in HPOList:
+                totalIC += HPOUtils.HPOTree.ICList[HPONode.index]
+            relatedHPONodes = HPOList
+        else:
+            relatedHPONodes, totalIC = HPOUtils.extractPreciseHPONodes(disease['phenotypeList'])
 
-        # test: use all ancestor node for disease
-        HPOInput = disease['phenotypeList']
-        totalIC = 0
-        HPOList = set()
-        HPONodes = list(HPOUtils.HPOTree.HPOList.values())
-        for HPOTerm in HPOInput:
-            validNode = HPOUtils.HPOTree.getHPO(HPOTerm.strip())
-            if (validNode != None):
-                HPOList.add(validNode)
-                for ancestorIndex in validNode.ancestorIndexs:
-                    HPOList.add(HPONodes[ancestorIndex])
-        for HPONode in HPOList:
-            totalIC += HPOUtils.HPOTree.ICList[HPONode.index]
-        relatedHPONodes = HPOList
-        
         diseaseType = disease['type']
         relatedGenes = disease2GeneJson.get(id)
         if (relatedGenes == None):

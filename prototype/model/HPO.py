@@ -76,6 +76,7 @@ class HPOTree:
         self.ICList = None
         self.nonPhenotypicTerms = set()
         self.similarityMatrix = dict()
+        self.nodes = list()
     
     def addHPO(self, HPONode):
         if (len(HPONode.parents) == 0 and HPONode.id != config.HPORoot):
@@ -124,6 +125,7 @@ class HPOTree:
         self.calculateReplacement()
         self.calculateLink()
         self.calculateNonPhenotypicNodes()
+        self.nodes = list(self.HPOList.values())
 
     # pick out HPO terms for non phenotypic use (e.g. frequency, blood group, inheritance mode)
     def calculateNonPhenotypicNodes(self):
