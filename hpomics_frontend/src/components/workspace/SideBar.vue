@@ -33,14 +33,14 @@
 <!--                        <slot name="title">缺陷追溯</slot>-->
 <!--                    </template>-->
 <!--                    <template v-slot:title>1</template>-->
-                    <router-link to="/">
-                        <el-menu-item index="1-1">录入病例</el-menu-item>
+                    <router-link to="/addSinglePatient">
+                        <el-menu-item index="1-1">录入单病例</el-menu-item>
                     </router-link>
-                    <router-link to="/">
-                        <el-menu-item index="1-2">病例列表</el-menu-item>
+                    <router-link to="/addMultiplePatient">
+                        <el-menu-item index="1-2">批量导入病例</el-menu-item>
                     </router-link>
-                    <router-link to="/">
-                        <el-menu-item index="1-3">结果查询</el-menu-item>
+                    <router-link to="/jobList">
+                        <el-menu-item index="1-3">病例列表</el-menu-item>
                     </router-link>
                 </el-sub-menu>
 

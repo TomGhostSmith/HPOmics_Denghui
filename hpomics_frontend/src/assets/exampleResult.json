@@ -1,6 +1,6 @@
 [
     {
-      "disease": "OMIM:231670 Glutaric acidemia I",
+      "disease": "OMIM:231670\nGlutaric acidemia I",
       "overlap": [
         "HP:0000256",
         "HP:0003150",

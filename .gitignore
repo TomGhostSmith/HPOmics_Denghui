@@ -23,3 +23,9 @@
 hs_err_pid*
 
 */.snakemake
+metaResults
+prototype/PhenoBrainResult
+prototype/data
+Result.xlsx
+
+hpomics_frontend/ROOT

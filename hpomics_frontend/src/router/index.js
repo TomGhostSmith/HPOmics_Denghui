@@ -1,10 +1,14 @@
 import {createRouter, createWebHashHistory} from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import SideBar from "@/components/workspace/GlobalComponent/SideBar.vue";
-import NaviBar from "@/components/workspace/GlobalComponent/NaviBar";
-import patientInfo from "@/components/workspace/patient/patientInfo";
-import caseInfo from "@/components/workspace/patient/caseInfo";
+import SideBar from "@/components/workspace/SideBar.vue";
+import NaviBar from "@/components/workspace/NaviBar";
+import patientInfo from "@/components/workspace/GlobalComponent/patientInfo";
+import caseInfo from "@/components/workspace/GlobalComponent/caseInfo";
 import resultTable from "@/components/workspace/patient/resultTable";
+import addSinglePatient from "@/components/workspace/newPatient/addSinglePatient";
+import addMultiplePatient from "@/components/workspace/newPatient/addMultiplePatient";
+import jobList from "@/components/workspace/patient/jobList";
+import caseList from "@/components/workspace/patient/caseList";
 // import Vue from 'vue'
 // import VueRouter from 'vue-router'
 //
@@ -14,7 +18,8 @@ const routes = [
     {
         path: '/',
         name: 'home',
-        component: HomeView
+        component: HomeView,
+        redirect: '/jobList'
     },
     {
         path: '/about',
@@ -34,24 +39,33 @@ const routes = [
                 path: '/dashboard',
                 name: 'dashboard',
                 component: SideBar,
-                redirect: 'dashHome',
+                redirect: '/jobList',
                 children: [
                     {
-                        path: '/dashHome',
-                        name: 'dashhome',
-                        // component: patientInfo
-                        component: caseInfo
+                        path: '/addSinglePatient',
+                        name: 'addSinglePatient',
+                        component: addSinglePatient
                     },
                     {
-                        path: '/dashHome2',
-                        name: 'dashhome2',
-                        component: patientInfo
+                        path: '/addMultiplePatient',
+                        name: 'addMultiplePatient',
+                        component: addMultiplePatient
                     },
                     {
-                        path: "/dashHome3",
-                        name: 'dashHome3',
+                        path: '/jobList',
+                        name: 'jobList',
+                        component: jobList
+                    },
+                    {
+                        path: '/caseList/:taskName',
+                        name: 'caseList',
+                        component: caseList
+                    },
+                    {
+                        path: '/caseResult/:taskName/:patientIdentity',
+                        name: 'caseResult',
                         component: resultTable
-                    }
+                    },
                 ]
             }
         ]
