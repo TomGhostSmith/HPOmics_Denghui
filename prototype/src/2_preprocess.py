@@ -46,7 +46,11 @@ def calcLocalIC():
                 continue
             localDiseaseCount += 1
             with open(file=f"{config.patientPath}/{file}", mode='rt', encoding='utf-8') as fp:
-                HPOInput = fp.readlines()
+                if (config.inputType == 'plain'):
+                    HPOInput = fp.readlines()
+                elif (config.inputType == 'json'):
+                    patientInfo = json.load(fp)
+                    HPOInput = patientInfo['HPOList']
             for HPOTerm in HPOInput:
                 validNode = HPOUtils.HPOTree.getHPO(HPOTerm.strip())
                 if (validNode != None):

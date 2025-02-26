@@ -18,9 +18,9 @@ class HPOUtil:
         self.HPOTree = loadHPOTree()
 
     def loadIC(self):
-        IOUtils.showInfo("Loading IC")
         with open(file=config.currentUseICPath, mode='rt', encoding='utf-8') as fp:
             self.HPOTree.setIC(json.load(fp))
+        IOUtils.showInfo("IC Loaded")
 
     def loadSimilarity(self):
         """

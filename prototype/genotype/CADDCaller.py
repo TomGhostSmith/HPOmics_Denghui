@@ -6,6 +6,8 @@ import json
 import sys
 import math
 
+import time
+
 sys.path.append('.')
 
 from config import config
@@ -15,6 +17,9 @@ def processOneFile(inputPath, outputPath):
     params = ["-a", "-g", "GRCh38", "-c", "12", "-o", outputPath, inputPath]
     subprocess.run(['bash', config.CADDPath] + params, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     scores = dict()
+
+    while (not os.path.exists(outputPath)):
+        time.sleep(0.5)
 
     with gzip.open(filename=outputPath, mode='rt') as fp:
         fp.readline()  # skip first line
@@ -102,15 +107,45 @@ def main():
     files = os.listdir(config.CADDInputFolder)
     count = 0
     IOUtils.showInfo('startProcess')
+    fileList = multiprocessing.Queue()
+    totalCount = len(files)
     for file in files:
-        if (count < 0):
-            print(f"skip {file} {count}/{len(files)}")
-            continue
-
-        processOneCase(file)
-            
         count += 1
-        IOUtils.showInfo("finish " + file + " " + str(count) + "/" + str(len(files)))
+        if (count < 0):
+            IOUtils.showInfo(f"skip {file} {count}/{len(files)}", "PROC")
+            continue
+        if (os.path.isdir(f"{config.CADDInputFolder}/{file}")):
+            IOUtils.showInfo(f"skip folder {file} {count}/{len(files)}", "PROC")
+            continue
+        # if (os.path.exists(f"{config.CADDOutputFolder}/{file.replace('.vcf', '.json')}")):
+        #     continue
+        fileList.put((file, count))
+
+    if (config.supportFork):
+        queueLock = multiprocessing.Lock()
+        childPIDList = list()
+
+        for _ in range (config.CPUCores):
+            pid = os.fork()
+            if (pid == 0):
+                while True:
+                    queueLock.acquire()
+                    if (fileList.empty()):
+                        queueLock.release()
+                        break
+                    (file, index) = fileList.get()
+                    queueLock.release()
+                    processOneCase(file)
+                    IOUtils.showInfo(f"[{index}/{totalCount}] Processed {str(file)}")
+                os._exit(0)
+            else:
+                IOUtils.showInfo(f'Forked subprocess with pid {pid}', 'PROC')
+                childPIDList.append(pid)
+        
+        for pid in childPIDList:
+            os.waitpid(pid, 0)
+            
+        IOUtils.showInfo("VCF files processed")
 
 
 if (__name__ == "__main__"):

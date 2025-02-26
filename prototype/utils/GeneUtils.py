@@ -67,6 +67,7 @@ def loadGenes():
             if (relatedDiseasesForOneName != None):
                 relatedDiseases |= set(relatedDiseasesForOneName)
         geneList.addGene(Gene(id, geneNames, relatedHPONodes, totalIC, geneType, list(relatedDiseases)))
+    IOUtils.showInfo('Gene list Loaded')
     return geneList
 
 def evaluateWithSimilarity(gene, patient):

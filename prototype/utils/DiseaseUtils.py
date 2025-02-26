@@ -58,6 +58,10 @@ def loadDiseases():
         if (relatedGenes == None):
             relatedGenes = list()
         diseaseList.addDisease(Disease(id, disease['name'], relatedHPONodes, totalIC, diseaseType, relatedGenes))
+    with open(file=config.diseaseSynonymPath, mode='rt', encoding='utf-8') as fp:
+        diseaseSynonym = json.load(fp)
+    diseaseList.setSynonym(diseaseSynonym)
+    IOUtils.showInfo('Disease list Loaded')
     return diseaseList
 
 def evaluateWithSimilarity(disease, patient):

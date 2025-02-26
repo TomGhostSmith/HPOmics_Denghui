@@ -13,6 +13,34 @@ from utils.DiseaseUtils import DiseaseUtils
 from utils.GeneUtils import GeneUtils
 from genotype import CADDCaller
 
+def loadPatient(fileName, filePath):
+    with open(file=filePath, mode='rt', encoding='utf-8') as fp:
+        if (config.inputType == 'plain'):
+            VCFFileName = fileName + '.vcf'
+            HPOInput = fp.readlines()
+        elif (config.inputType == 'json'):
+            patientInfo = json.load(fp)
+            VCFFileName = patientInfo["VCFFileName"]
+            HPOInput = patientInfo['HPOList']
+    
+    if (config.useAncestor == 'both' or config.useAncestor == 'patient'):
+        totalIC = 0
+        HPOList = set()
+        for HPOTerm in HPOInput:
+            validNode = HPOUtils.HPOTree.getHPO(HPOTerm.strip())
+            if (validNode != None):
+                HPOList.add(validNode)
+                for ancestorIndex in validNode.ancestorIndexs:
+                    HPOList.add(HPOUtils.HPOTree.nodes[ancestorIndex])
+        for HPONode in HPOList:
+            totalIC += HPOUtils.HPOTree.ICList[HPONode.index]
+    else:
+        HPOList, totalIC = HPOUtils.extractPreciseHPONodes(HPOInput)
+
+
+    return HPOList, totalIC, VCFFileName
+    
+
 def evaluateOne(file):
     # extract file name
     dotIndex = str(file).rfind('.')
@@ -22,28 +50,15 @@ def evaluateOne(file):
         fileName = str(file)
 
     # extract HPO term and replace old term with new
-    with open(file=f"{config.patientPath}/{file}", mode='rt', encoding='utf-8') as fp:
-        if (config.useAncestor == 'both' or config.useAncestor == 'patient'):
-            HPOInput = fp.readlines()
-            totalIC = 0
-            HPOList = set()
-            for HPOTerm in HPOInput:
-                validNode = HPOUtils.HPOTree.getHPO(HPOTerm.strip())
-                if (validNode != None):
-                    HPOList.add(validNode)
-                    for ancestorIndex in validNode.ancestorIndexs:
-                        HPOList.add(HPOUtils.HPOTree.nodes[ancestorIndex])
-            for HPONode in HPOList:
-                totalIC += HPOUtils.HPOTree.ICList[HPONode.index]
-        else:
-            HPOList, totalIC = HPOUtils.extractPreciseHPONodes(fp.readlines())
+    HPOList, totalIC, VCFFileName = loadPatient(fileName, f'{config.patientPath}/{file}')
     
-    patient = Patient(fileName=fileName, HPOList=HPOList, info=None, taskType=config.taskType, totalIC=totalIC)  # info can be used in the future
+    patient = Patient(fileName=fileName, HPOList=HPOList, info=None, taskType=config.taskType, totalIC=totalIC, VCFFileName=VCFFileName)  # info can be used in the future
 
     DiseaseUtils.evaluate(patient)
     GeneUtils.evaluate(patient)
 
-    # patient.CADDScores = CADDCaller.processOneCase(patient.fileName + ".vcf")
+    if (config.CADDMethod != 'none'):
+        CADDCaller.processOneCase(patient.VCFFileName)
 
 
     with open(file=f'{config.splitResultPath}/{fileName}.csv', mode='wt', encoding='utf-8') as fp:
@@ -82,7 +97,7 @@ def evaluate():
         # check index to skip some patients do not need to process
         if (processedCount < startIndex or processedCount >= endIndex):
             processedCount += 1
-            # IOUtils.showInfo(f"[{processedCount}/{totalCount}] Skipped file {str(file)}", 'PROC')
+            IOUtils.showInfo(f"[{processedCount}/{totalCount}] Skipped file {str(file)}", 'PROC')
             continue
 
 
@@ -104,7 +119,6 @@ def evaluate():
 
         # evaluate case
         processedCount += 1
-
         fileQueue.put((file, processedCount))
         # fileQueue.append((file, processedCount))
         
@@ -119,7 +133,9 @@ def evaluate():
         # processes.append((processedCount, file, p))
         # p.start()
         # IOUtils.showInfo(f"[{processedCount}/{totalCount}] Loaded task for file {str(file)}")
-    
+    if (fileQueue.empty()):
+        IOUtils.showInfo(f'No patient to process in {config.patientPath}!', 'WARN')
+
     if (config.supportFork):
         fileQueueLock = multiprocessing.Lock()
         childPIDList = list()

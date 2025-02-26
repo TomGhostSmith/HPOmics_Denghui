@@ -4,6 +4,7 @@ class Config():
     def __init__(self) -> None:
         # task settings
         self.projectPath = "/home/joy/Software/HPOmics/prototype"
+        self.inputType = 'plain'  # can be 'plain' for plain text HPO and 'json' for HPOmics file
 
         # version settings:
         self.HPOVersion = "20231009"    # can be '20231009' or '20221005'
@@ -26,8 +27,9 @@ class Config():
 
         # combine settings
         self.scoreCombineMethods = ['double', 'p2dg'] # list of 'double', 'p2dg', 'dg2p'
-        self.CADDMethod = 'multiply' # can be 'multiply', 'none'
-        self.CADDMinRatio = 0.5  # if no variant on this gene exists, final score should multiply with this minimum ratio
+        self.CADDMethod = 'multiply' # can be 'multiply', 'fixed', 'none'
+        self.CADDMinValue = 0.5  # if no variant on this gene exists, final score should multiply with this minimum ratio
+        self.CADDMAxProportion = 0.5
 
         # combine disease2gene setting
         self.disease2GeneMethod = 'max'  # 'average' or 'max'
@@ -49,6 +51,8 @@ class Config():
         # output settings
         self.ignoreWarning = True
         self.ignoreSmallProcess = True
+        # self.ignoreSmallProcess = False
+        self.HPOmcisOutput = False
 
         # evaluate settings
         self.focusTop = [1, 3, 5, 10, 20, 50, 100]
@@ -123,9 +127,9 @@ class Config():
         self.taskParams = f'{self.versionParams}_IC={self.ICName}_similarity={self.similarityMethod}'
         self.calculateParams = f'{self.datasetParams}{self.taskParams}_ancestor={self.useAncestor}'
         if (self.taskType == 'gene'):
-            self.combineParams = f'{self.calculateParams}_combine={"+".join(self.scoreCombineMethods)}_CADD={self.CADDMethod};{self.CADDMinRatio}_d2g={self.disease2GeneMethod};{self.disease2GeneProportionMethod};{self.maxDiseaseProportion}_ppi={self.usePPI};{self.selfProportion};{self.directProportion};{self.indirectProportion};{self.directScoreMethod}'
+            self.combineParams = f'{self.calculateParams}_combine={"+".join(self.scoreCombineMethods)}_CADD={self.CADDMethod};{self.CADDMinValue};{self.CADDMAxProportion}_d2g={self.disease2GeneMethod};{self.disease2GeneProportionMethod};{self.maxDiseaseProportion}_ppi={self.usePPI};{self.selfProportion};{self.directProportion};{self.indirectProportion};{self.directScoreMethod}'
         else:
-            self.combineParams = f'{self.calculateParams}_combine={"+".join(self.scoreCombineMethods)}_CADD={self.CADDMethod};{self.CADDMinRatio}_g2d={self.gene2DiseaseMethod};{self.gene2DiseaseProportionMethod};{self.maxGeneProportion}_ppi={self.usePPI};{self.selfProportion};{self.directProportion};{self.indirectProportion};{self.directScoreMethod}'
+            self.combineParams = f'{self.calculateParams}_combine={"+".join(self.scoreCombineMethods)}_CADD={self.CADDMethod};{self.CADDMinValue};{self.CADDMAxProportion}_g2d={self.gene2DiseaseMethod};{self.gene2DiseaseProportionMethod};{self.maxGeneProportion}_ppi={self.usePPI};{self.selfProportion};{self.directProportion};{self.indirectProportion};{self.directScoreMethod}'
 
         # if (self.ICType.startswith('local')):
             # self.ICType = f'{self.ICType}-{self.datasetName}-{self.taskType}'
@@ -195,7 +199,12 @@ class Config():
         self.CADDTempFolder = f"{self.projectPath}/temp"
         # self.CADDInputFolder = f"{self.projectPath}/genotype/input"
         self.CADDInputFolder = f"/home/joy/Data/HPOmicsData/data/data3vcf2"
-        self.CADDOutputFolder = f"{self.projectPath}/CADDResult"
+        self.CADDOutputFolder = f"{self.projectPath}/CADDResult/{self.datasetName}"
+
+        # cached Files
+        self.oldPPIShortestPathCache = f"/Data/CAGI/Cache/PPICache.json"
+        self.PPIShortestPathCache = f"/Data/CAGI/Cache/PPICache.npz"
+        self.PPIIndexMap = f"/Data/CAGI/Cache/PPIIndexMap.json"
 
         
 config = Config()

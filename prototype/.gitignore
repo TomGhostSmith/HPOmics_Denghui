@@ -10,3 +10,4 @@ caseAnalysis/
 __pycache__/
 .snakemake/
 nohup.out
+Tasks

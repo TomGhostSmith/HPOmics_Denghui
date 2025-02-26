@@ -29,10 +29,20 @@ class Disease:
 class DiseaseList:
     def __init__(self) -> None:
         self.diseaseMap = dict()  # key: disease id, value: disease node
+        self.synonym = dict()   # store some disease id which are not in the diseaseMap. use this dict to map them into exising diseases
 
     def addDisease(self, disease):
         self.diseaseMap[disease.id] = disease
     
     def searchDisease(self, diseaseID):
-        return self.diseaseMap.get(diseaseID)
-
+        synonym = self.synonym.get(diseaseID)
+        if (synonym == None):
+            return self.diseaseMap.get(diseaseID)
+        else:
+            return self.diseaseMap.get(synonym)
+    
+    def setSynonym(self, synonym):
+        for (key, value) in synonym.items():
+            if (isinstance(value, str)):  # ignore CCRD synonyms
+                if (self.diseaseMap.get(value) == None and self.diseaseMap.get(key) != None):
+                    self.synonym[value] = key

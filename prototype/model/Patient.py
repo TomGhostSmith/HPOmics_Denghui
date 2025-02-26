@@ -1,5 +1,5 @@
 class Patient:
-    def __init__(self, fileName, HPOList, info, taskType, totalIC):
+    def __init__(self, fileName, HPOList, info, taskType, totalIC, VCFFileName):
         self.fileName = fileName
         self.HPOList = HPOList
         self.info = info
@@ -8,6 +8,7 @@ class Patient:
         # self.CADDScores = None
         self.taskType = taskType
         self.totalIC = totalIC
+        self.VCFFileName = VCFFileName
     
     # output result in lines
     def getResult(self):

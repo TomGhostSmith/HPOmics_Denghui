@@ -2,6 +2,7 @@ import sys
 import os
 import math
 import json
+import importlib
 sys.path.append('.')
 
 from config import config
@@ -9,9 +10,13 @@ from utils import IOUtils
 from utils.HPOUtils import HPOUtils
 from utils.DiseaseUtils import DiseaseUtils
 from utils.GeneUtils import GeneUtils
+from model.PPI import ppi
+
+Phen2Disease = importlib.import_module('src.4_Phen2Disease')
 
 def calcDisease2Gene(geneOriginScore, relatedDiseaseScores):
-
+    if (config.disease2GeneProportionMethod == 'none'):
+        return geneOriginScore
     if (len(relatedDiseaseScores) > 0):
         # get integrated related disease score
         if (config.disease2GeneMethod == 'average'):
@@ -30,33 +35,10 @@ def calcDisease2Gene(geneOriginScore, relatedDiseaseScores):
 
     return finalScore
 
-    # method 1: based on related disease scores
-    # if (len(relatedDiseaseScores) > 0):
-    #     finalScore = max(relatedDiseaseScores)
-    # else:
-    #     # finalScore = geneOriginScore
-    #     finalScore = 0
-    
-    # method 2: integrated with average
-    # maxDiseaseProportion = 0.5
-    # if (len(relatedDiseaseScores) > 0):
-    #     diseaseProportion = (1 - 1/(1 + len(relatedDiseaseScores))) * maxDiseaseProportion
-    #     finalScore = geneOriginScore * (1 - diseaseProportion) + sum(relatedDiseaseScores)/len(relatedDiseaseScores) * diseaseProportion
-    # else:
-    #     finalScore = geneOriginScore
-
-    # method 3: integrated with max
-    # maxDiseaseProportion = config.maxDiseaseProportion
-    # if (len(relatedDiseaseScores) > 0):
-    #     diseaseProportion = (1 - 1/(1 + len(relatedDiseaseScores))) * maxDiseaseProportion
-    #     finalScore = geneOriginScore * (1 - diseaseProportion) + max(relatedDiseaseScores) * diseaseProportion
-    # else:
-    #     finalScore = geneOriginScore
-
-
-
 def calcGene2Disease(diseaseOriginScore, relatedGeneScores):
     # return diseaseOriginScore
+    if (config.gene2DiseaseProportionMethod == 'none'):
+        return diseaseOriginScore
     if (len(relatedGeneScores) > 0):
         # get integrated related gene score
         if (config.gene2DiseaseMethod == 'average'):
@@ -79,8 +61,10 @@ def mergeScoreWithCADD(originScore, CADDScore):
     if (config.CADDMethod == 'none'):
         return originScore
     elif (config.CADDMethod == 'multiply'):
-        ratio = CADDScore * (1 - config.CADDMinRatio) + config.CADDMinRatio
+        ratio = CADDScore * (1 - config.CADDMinValue) + config.CADDMinValue
         return originScore * ratio
+    elif (config.CADDMethod == 'fixed'):
+        return CADDScore * config.CADDMAxProportion + (1 - config.CADDMAxProportion) * originScore
 
 
 def calcPhenoBrain(disease2Patient, patient2Disease, diseaseIC, patientIC):
@@ -104,48 +88,16 @@ def calc(dg2Patient, patient2DG, dgIC, patientIC):
 
     return finalScore
 
-
-    # # return (disease2Patient + patient2Disease)/(diseaseIC + patientIC)
-    # if (patientIC != 0 and diseaseIC + patientIC != 0):
-    # # if (patientIC != 0):
-    #     # return patient2Disease/patientIC
-    #     return ((disease2Patient + patient2Disease)/(diseaseIC + patientIC) + patient2Disease/patientIC)/2
-    # # if (patientIC != 0):
-    #     # return patient2Disease/patientIC
-    # else:
-    #     return 0
-    # # return (disease2Patient + 4*patient2Disease)/(diseaseIC + 4*patientIC) + patient2Disease/patientIC
-    # # return patient2Disease/patientIC
-    # if (diseaseIC != 0):
-    #     return (disease2Patient/diseaseIC + patient2Disease/patientIC)/2
-    #     # return ((disease2Patient + patient2Disease)/(diseaseIC + patientIC))
-    # #     return (disease2Patient + patient2Disease)/(diseaseIC + patientIC) + disease2Patient/diseaseIC
-    # else:
-    #     return patient2Disease/patientIC
-    #     # return 0
-
-    # if (diseaseIC == 0):
-    #     return 0
-    # elif (disease2Patient/diseaseIC > 0.25):
-    # # elif (diseaseIC > patientIC):
-    #     return patient2Disease/patientIC
-    # else:
-    #     return patient2Disease/patientIC * 0.95
-    # return ((disease2Patient + patient2Disease)/(diseaseIC + patientIC) + patient2Disease/patientIC)/2
-    # return (disease2Patient/diseaseIC + patient2Disease/patientIC)/2
-
-    # return max(patient2Disease/patientIC, disease2Patient/diseaseIC)
-    # return (patient2Disease/patientIC*diseaseIC + disease2Patient/diseaseIC*patientIC)/(patientIC + diseaseIC)
-
 def combineFiles(files, diseaseSynonym):
     allGeneList = set(GeneUtils.geneList.geneSymbolMap.keys()) | set(GeneUtils.geneList.geneLink.keys())
+
     for file in files:
         # skip folders
         if (os.path.isdir(f"{config.splitResultPath}/{file}")):
             continue
 
-        if (config.CADDMethod != 'none' and os.path.exists(f"{config.CADDOutputFolder}/{file}.json")):
-            with open(f"{config.CADDOutputFolder}/{file}.json") as fp:
+        if (config.CADDMethod != 'none' and os.path.exists(f"{config.CADDOutputFolder}/{file.replace('.csv', '.json')}")):
+            with open(f"{config.CADDOutputFolder}/{file.replace('.csv', '.json')}") as fp:
                 CADDScores = json.load(fp)
             CADDmax = max(CADDScores.values())
             CADDmin = min(CADDScores.values())
@@ -181,7 +133,40 @@ def combineFiles(files, diseaseSynonym):
                 geneScores[terms[1]] = res
         
 
-        if (config.usePPI):
+        if (config.usePPI == 'broadcast'):
+            # Note: actually, there are no "direct" genes! all are indirect!
+            linkedGeneScores = dict()
+
+            for gene in allGeneList:
+                geneNodeID = ppi.nodeIndexMap.get(gene)
+                if (geneNodeID != None):
+                    totalScore = 0
+                    totalWeight = 0
+                    for relatedGene, pathLength in (zip(ppi.nodeIndexMap.keys(), ppi.cachedShortestPath[geneNodeID])):
+                        thisGeneScore = geneScores.get(relatedGene)
+                        if (thisGeneScore != None and pathLength != 0):
+                            weight = 1 / pathLength
+                            totalScore += weight * thisGeneScore
+                            totalWeight += weight
+                    indirectScore = totalScore / totalWeight if totalWeight > 0 else None
+
+                selfScore = geneScores.get(gene)
+                summedScore = 0
+                summedWeight = 0
+                if (selfScore != None):
+                    summedScore += (config.selfProportion * selfScore)
+                    summedWeight += config.selfProportion
+                if (indirectScore != None):
+                    summedScore += (config.indirectProportion * indirectScore)
+                    summedWeight += config.indirectProportion
+                
+                if (summedWeight > 0):
+                    linkedGeneScores[gene] = summedScore / summedWeight
+            
+            geneScores = linkedGeneScores
+
+
+        elif (config.usePPI == True):
             # calc gene-gene related scores with ppi
             linkedGeneScores = dict()
 
@@ -232,28 +217,14 @@ def combineFiles(files, diseaseSynonym):
                 else:
                     linkedGeneScores[gene] = 0
 
-            geneScores = linkedGeneScores
-
-                # if (currentGeneScore != None):
-                #     # method 0: if there is current score, then use current score
-                #     linkedGeneScores[gene] = currentGeneScore
-                # elif (len(directRelatedGeneScores) > 0):
-                #     # method 1: if there is direct related gene, then use average score in direct related gene scores
-                #     linkedGeneScores[gene] =
-                # elif (totalWeight > 0):
-                #     # method 2: if there is no direct related gene, use weighted average score of indirect genes
-                #     weightedSumScore = 
-                #     linkedGeneScores[gene] = weightedSumScore / totalWeight
-                # else:
-                #     linkedGeneScores[gene] = 0 
-
-        
+            geneScores = linkedGeneScores        
 
         # link gene-disease for integrated prediction
         finalScores = dict()
         if (config.taskType == 'disease'):
             for (disease, diseaseScore) in diseaseScores.items():
-                relatedGenes = DiseaseUtils.diseaseList.searchDisease(disease).relatedGenes
+                diseaseObject = DiseaseUtils.diseaseList.searchDisease(disease)
+                relatedGenes = diseaseObject.relatedGenes
                 relatedGeneText = ''
                 relatedGeneScores = list()
                 for gene in relatedGenes:
@@ -267,8 +238,6 @@ def combineFiles(files, diseaseSynonym):
                     maxScore = 0
                 integratedScore = (calcGene2Disease(diseaseScore, relatedGeneScores), diseaseScore, relatedGeneText, maxScore)
                 synonyms = diseaseSynonym.get(disease)
-                if (disease == 'ORPHA:25'):
-                    print("?")
                 if (synonyms != None):
                     if (isinstance(synonyms, str)):
                         synonyms = [synonyms]
@@ -302,20 +271,99 @@ def combineFiles(files, diseaseSynonym):
                 finalScores[gene] = (calcDisease2Gene(geneScore, relatedDiseaseScores), geneScore, relatedDiseaseText, maxScore)
         
 
+        outputScores = dict()
+        for key, value in finalScores.items():
+            outputScores[key] = value[0]
+
+        # with open(f"/Data/HPOmicsData/result/{config.datasetName}/Phen2Disease2/{file[:-4]}.json", 'wt') as fp:
+        #     json.dump(outputScores, fp, indent=2, sort_keys=True)
+
         result = dict(sorted(finalScores.items(), key=lambda pair : pair[1], reverse=True))
+
+        lines = getOutputResultLines(file[:-4], result)
+
+        with open(f"{config.resultPath}/{file}", 'wt') as fp:
+            fp.writelines(lines)
+        
+
+
+        
+        # IOUtils.showInfo(f'combined {file}')
+
+def calcHPOOverlap(patientHPONodes, targetHPONodes):  # return: HPO Terms
+    targetHPOIndexs = {node.index for node in targetHPONodes}
+
+    overlappedTargetHPOIndexs = set()
+    overlappedPatientHPOIndexs = set()
+    remainedPatientHPOIndexs = set()
+    for patientHPONode in patientHPONodes:
+        overLapAncestors = patientHPONode.ancestorIndexs & targetHPOIndexs
+        if (len(overLapAncestors) > 0):
+            overlappedTargetHPOIndexs |= overLapAncestors
+            overlappedPatientHPOIndexs.add(patientHPONode.index)
+        else:
+            remainedPatientHPOIndexs.add(patientHPONode.index)
+    
+    remainedTargetHPOIndexs = targetHPOIndexs - overlappedTargetHPOIndexs
+
+    overLapHPOIndexs = sorted(overlappedTargetHPOIndexs, key=lambda obj : HPOUtils.HPOTree.ICList[obj])
+    excessHPOIndexs = sorted(remainedPatientHPOIndexs, key=lambda obj : HPOUtils.HPOTree.ICList[obj])
+    lossHPOIndexs = sorted(remainedTargetHPOIndexs, key=lambda obj : HPOUtils.HPOTree.ICList[obj])
+
+    overlapHPOs = [HPOUtils.HPOTree.nodes[index].id for index in overLapHPOIndexs]
+    excessHPOs = [HPOUtils.HPOTree.nodes[index].id for index in excessHPOIndexs]
+    lossHPOs = [HPOUtils.HPOTree.nodes[index].id for index in lossHPOIndexs]
+
+    return overlapHPOs, excessHPOs, lossHPOs
+            
+
+def getOutputResultLines(fileName, result):  # filename should have no extension
+    if (config.HPOmcisOutput):
+        if (config.inputType == 'plain'):
+            filePath = f'{config.patientPath}/{fileName}'
+        elif (config.inputType == 'json'):
+            filePath = f'{config.patientPath}/{fileName}.json'
+        HPOList, totalIC, VCFFileName = Phen2Disease.loadPatient(fileName, filePath)
+        
+        lines = list()
+        lines.append('id,name,finalScore,overlapHPO,excessHPO,lossHPO\n')
+        if (config.taskType == 'disease'):
+            for (key, value) in result.items():
+                diseaseObject = DiseaseUtils.diseaseList.searchDisease(key)
+                diseaseID = key
+                if (diseaseObject != None):
+                    overlapHPO, excessHPO, lossHPO = calcHPOOverlap(HPOList, diseaseObject.relatedHPONodes)
+                    diseaseName = diseaseObject.name[0].replace(",", " ")
+                else:
+                    overlapHPO = []
+                    excessHPO = []
+                    lossHPO = []
+                    diseaseName = ''
+                lines.append(f'{diseaseID},{diseaseName},{value[0]},{";".join(overlapHPO)},{";".join(excessHPO)},{";".join(lossHPO)}\n')
+        else:
+            for (key, value) in result.items():
+                geneObject = GeneUtils.geneList.searchGeneByName(key)
+                geneName = key
+                if (geneObject != None):
+                    overlapHPO, excessHPO, lossHPO = calcHPOOverlap(HPOList, geneObject.relatedHPONodes)
+                    geneID = geneObject.id
+                else:
+                    overlapHPO = []
+                    excessHPO = []
+                    lossHPO = []
+                    geneID = ''
+                lines.append(f'{geneID},{geneName},{value[0]},{";".join(overlapHPO)},{";".join(excessHPO)},{";".join(lossHPO)}\n')
+    else:
         if (config.taskType == 'disease'):
             lines = [f'{key},,{value[0]},{value[1]},{value[2]},{value[3]}\n' for (key, value) in result.items()]
         else:
             lines = [f',{key},{value[0]},{value[1]},{value[2]},{value[3]}\n' for (key, value) in result.items()]
         lines.insert(0, 'id,name,finalScore,originScore,relatedScore,maxRelatedScore\n')
-        with open(f"{config.resultPath}/{file}", 'wt') as fp:
-            fp.writelines(lines)
-
-        
-        # IOUtils.showInfo(f'combined {file}')
+    return lines
 
 def main():
     IOUtils.init(5)
+    ppi.loadCache()
     HPOUtils.loadIC()
     GeneUtils.reset()
     DiseaseUtils.reset()
@@ -324,6 +372,10 @@ def main():
 
     with open(file=config.diseaseSynonymPath, mode='rt', encoding='utf-8') as fp:
         diseaseSynonym = json.load(fp)
+
+    # IOUtils.showInfo("Save result to /Data")
+    # if (not os.path.exists(f"/Data/HPOmicsData/result/{config.datasetName}/Phen2Disease2")):
+    #     os.makedirs(f"/Data/HPOmicsData/result/{config.datasetName}/Phen2Disease2")
 
     if (config.supportFork):
         caseCountForOne = math.ceil(len(files) / config.CPUCores)
@@ -335,6 +387,7 @@ def main():
                 startIndex = i * caseCountForOne
                 endIndex = min((i + 1) * caseCountForOne, len(files))   # this index is not included
                 combineFiles(files[startIndex:endIndex], diseaseSynonym)
+                IOUtils.showInfo("Exit thread")
                 os._exit(0)
             else:
                 IOUtils.showInfo(f'Forked subprocess with pid {pid}', 'PROC')
